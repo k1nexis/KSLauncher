@@ -17,9 +17,40 @@ const fromB64url = (text: string) => Uint8Array.from(atob(text.replace(/-/g,'+')
 const enc = new TextEncoder();
 const randomId = () => crypto.randomUUID();
 const randomSecret = (size=32) => { const bytes=crypto.getRandomValues(new Uint8Array(size)); return b64url(bytes); };
+
 function validLoopbackCallback(value: string) {
   try { const u=new URL(value); return u.protocol==='http:' && (u.hostname==='127.0.0.1'||u.hostname==='localhost') && !!u.port && u.pathname==='/ely/callback' && !u.username && !u.password && !u.hash; } catch { return false; }
 }
+
+async function cleanupExpired(env: Env) {
+  try {
+    const now = Date.now();
+    await env.DB.prepare('DELETE FROM ely_oauth_states WHERE expires_at < ?').bind(now).run();
+    await env.DB.prepare('DELETE FROM ely_oauth_tickets WHERE expires_at < ?').bind(now).run();
+    await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now).run();
+  } catch {}
+}
+
+function validatePngGeometry(bytes: Uint8Array, kind: 'skin' | 'cape'): string | null {
+  if (bytes.length < 24) return 'Файл повреждён или слишком мал';
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  for (let i = 0; i < 8; i++) {
+    if (bytes[i] !== sig[i]) return 'Файл не является изображением PNG';
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+
+  if (kind === 'skin') {
+    const isValid = (width === 64 && height === 64) || (width === 64 && height === 32) || (width === 128 && height === 128);
+    if (!isValid) return `Некорректное разрешение скина (${width}x${height}). Ожидается 64x64 или 64x32.`;
+  } else if (kind === 'cape') {
+    const isValid = (width === 64 && height === 32) || (width === 22 && height === 17) || (width === 128 && height === 64);
+    if (!isValid) return `Некорректное разрешение плаща (${width}x${height}). Ожидается 64x32.`;
+  }
+  return null;
+}
+
 async function encryptTicket(value: unknown, secret: string) {
   const keyBytes=await crypto.subtle.digest('SHA-256',enc.encode(secret));
   const key=await crypto.subtle.importKey('raw',keyBytes,{name:'AES-GCM'},false,['encrypt']);
@@ -75,10 +106,14 @@ function validateIdentity(email: unknown, username: unknown, password: unknown) 
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url), origin = request.headers.get('origin');
     const headers = { 'access-control-allow-origin': origin===env.ALLOWED_ORIGIN ? env.ALLOWED_ORIGIN : 'null', 'access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS', 'access-control-allow-headers':'content-type,authorization', 'vary':'Origin' };
     if (request.method==='OPTIONS') return new Response(null,{status:204,headers});
+
+    // Auto-clean expired records in background
+    ctx.waitUntil(cleanupExpired(env));
+
     const route = async (): Promise<Response> => {
       if (url.pathname==='/v1/health' && request.method==='GET') return json({ok:true});
       if (url.pathname==='/v1/ely/start' && request.method==='GET') {
@@ -155,9 +190,9 @@ export default {
       }
       if (url.pathname==='/v1/me' && request.method==='GET') {
         const claims=await authenticate(request,env); if(!claims) return json({error:'Требуется авторизация'},401);
-        const user=await env.DB.prepare('SELECT id,username FROM users WHERE id=?').bind(claims.sub).first<{id:string;username:string}>();
-        const items=await env.DB.prepare('SELECT kind,object_key FROM cosmetics WHERE user_id=?').bind(claims.sub).all<{kind:string;object_key:string}>();
-        return json({account:user,cosmetics:items.results.map(x=>({kind:x.kind,url:`/v1/cosmetics/${x.kind}/${claims.sub}`}))});
+        const user=await env.DB.prepare('SELECT id,username,created_at FROM users WHERE id=?').bind(claims.sub).first<{id:string;username:string;created_at:number}>();
+        const items=await env.DB.prepare('SELECT kind,object_key,created_at FROM cosmetics WHERE user_id=?').bind(claims.sub).all<{kind:string;object_key:string;created_at:number}>();
+        return json({account:user,cosmetics:items.results.map(x=>({kind:x.kind,url:`/v1/cosmetics/${x.kind}/${claims.sub}`,createdAt:x.created_at}))});
       }
       const upload=url.pathname.match(/^\/v1\/cosmetics\/(skin|cape)$/);
       if(upload && request.method==='PUT') {
@@ -165,8 +200,14 @@ export default {
         if(!env.ASSETS) return json({error:'Загрузка косметики включается после настройки платного R2. Сайт и аккаунт KS System доступны без него.'},503);
         const type=request.headers.get('content-type')||'', size=Number(request.headers.get('content-length')||0);
         if(type!=='image/png' || size<1 || size>4*1024*1024) return json({error:'Ожидается PNG до 4 МБ'},400);
-        const bytes=await request.arrayBuffer(); if(bytes.byteLength>4*1024*1024) return json({error:'Файл больше 4 МБ'},413);
-        const kind=upload[1], key=`users/${claims.sub}/${kind}.png`;
+        const bytes=new Uint8Array(await request.arrayBuffer());
+        if(bytes.byteLength>4*1024*1024) return json({error:'Файл больше 4 МБ'},413);
+
+        const kind=upload[1] as 'skin' | 'cape';
+        const geoError = validatePngGeometry(bytes, kind);
+        if (geoError) return json({error: geoError}, 400);
+
+        const key=`users/${claims.sub}/${kind}.png`;
         await env.ASSETS.put(key,bytes,{httpMetadata:{contentType:'image/png',cacheControl:'public, max-age=300'}});
         await env.DB.prepare('INSERT INTO cosmetics(id,user_id,kind,object_key,content_type,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,kind) DO UPDATE SET object_key=excluded.object_key,created_at=excluded.created_at').bind(randomId(),claims.sub,kind,key,'image/png',Date.now()).run();
         return json({kind,url:`/v1/cosmetics/${kind}/${claims.sub}`},201);
@@ -174,7 +215,6 @@ export default {
       const asset=url.pathname.match(/^\/v1\/cosmetics\/(skin|cape)\/([\w-]+)$/);
       if(asset && request.method==='GET') {
         const kind=asset[1], owner=asset[2];
-        // Cosmetics are public only after explicit user opt-in in a production deployment.
         const row=await env.DB.prepare('SELECT object_key FROM cosmetics WHERE user_id=? AND kind=?').bind(owner,kind).first<{object_key:string}>();
         if(!row) return json({error:'Не найдено'},404);
         if(!env.ASSETS) return json({error:'Косметика временно недоступна без R2'},503);
@@ -185,5 +225,8 @@ export default {
     };
     const response=await route(); const merged=new Headers(response.headers); for(const [k,v] of Object.entries(headers)) merged.set(k,v);
     return new Response(response.body,{status:response.status,headers:merged});
+  },
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(cleanupExpired(env));
   }
 } satisfies ExportedHandler<Env>;

@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private readonly CurseForgeService _curseforge = new();
     private readonly MinecraftVersionService _versions = new();
     private readonly OfflineProfileStore _profiles = new();
+    private readonly AccountManager _accountManager = new();
     private readonly MicrosoftAccountService _microsoft = new();
     private readonly ElyAccountService _ely = new();
     private readonly AuthlibInjectorService _authlibInjector = new();
@@ -55,6 +56,7 @@ public partial class MainWindow : Window
     private bool _suppressSettingsWrites;
     private string _gameLanguage = "ru";
     private string? _activeCustomInstancePath;
+    private string? _selectedJavaPath;
 
     public MainWindow()
     {
@@ -75,6 +77,8 @@ public partial class MainWindow : Window
         await RestoreSettingsAsync();
         await LoadVersionsAsync();
         LoadLibraryInstances();
+        LoadJavaRuntimes();
+        LoadSavedAccounts();
     }
 
     private async Task LoadVersionsAsync()
@@ -149,6 +153,11 @@ public partial class MainWindow : Window
                 }
             }
 
+            if (!string.IsNullOrWhiteSpace(settings?.JavaPath) && File.Exists(settings.JavaPath))
+            {
+                _selectedJavaPath = settings.JavaPath;
+            }
+
             if (!string.IsNullOrWhiteSpace(settings?.BackgroundPath) && File.Exists(settings.BackgroundPath))
             {
                 ApplyBackground(settings.BackgroundPath);
@@ -169,12 +178,13 @@ public partial class MainWindow : Window
             _gradientAccent,
             _backgroundDim,
             _secondaryAccentColor,
-            _gameLanguage
+            _gameLanguage,
+            _selectedJavaPath
         ), new JsonSerializerOptions { WriteIndented = true }));
     }
 
     // ==========================================
-    // ЗАПУСК ИГРЫ
+    // ЗАПУСК ИГРЫ И КОНСОЛЬ ЛОГОВ
     // ==========================================
 
     private async void Play_Click(object sender, RoutedEventArgs e)
@@ -219,7 +229,7 @@ public partial class MainWindow : Window
             }
 
             InstallProgress.IsIndeterminate = true;
-            await _minecraft.LaunchAsync(
+            var process = await _minecraft.LaunchAsync(
                 version: version,
                 loader: loader,
                 session: session,
@@ -227,13 +237,25 @@ public partial class MainWindow : Window
                 stringDeduplication: StringDedupBox.IsChecked == true,
                 authlibInjectorPath: authlibInjectorPath,
                 customInstanceRoot: _activeCustomInstancePath,
-                gameLanguage: _gameLanguage
+                gameLanguage: _gameLanguage,
+                javaPath: _selectedJavaPath,
+                onProcessExited: exitCode =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (exitCode != 0)
+                        {
+                            QuickRepairButton.Visibility = Visibility.Visible;
+                            StatusText.Text = $"Игра аварийно завершилась (код {exitCode}). Нажмите «Починить сборку» или «Консоль логов».";
+                        }
+                    });
+                }
             );
 
             InstallProgress.IsIndeterminate = false;
             InstallProgress.Value = 100;
             ProgressText.Text = "ЗАПУЩЕНО";
-            StatusText.Text = $"Minecraft {version} ({loader}) успешно запущен для {session.Username}!";
+            StatusText.Text = $"Minecraft {version} ({loader}) успешно запущен (PID {process.Id})!";
             LoadLibraryInstances();
         }
         catch (Exception ex)
@@ -250,6 +272,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ViewLogs_Click(object sender, RoutedEventArgs e)
+    {
+        var logWin = new LogWindow(_minecraft.Logs) { Owner = this };
+        logWin.Show();
+    }
+
     private void GameLanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_uiReady || _suppressSettingsWrites) return;
@@ -258,7 +286,7 @@ public partial class MainWindow : Window
     }
 
     // ==========================================
-    // БИБЛИОТЕКА И УПРАВЛЕНИЕ СБОРКАМИ (Requirement 1 & 10)
+    // БИБЛИОТЕКА И УПРАВЛЕНИЕ СБОРКАМИ (С добавлением модов и зависимостей)
     // ==========================================
 
     private void LoadLibraryInstances()
@@ -277,7 +305,7 @@ public partial class MainWindow : Window
         StatusText.Text = "Список сборок в библиотеке обновлён.";
     }
 
-    private void CreateInstance_Click(object sender, RoutedEventArgs e)
+    private async void CreateInstance_Click(object sender, RoutedEventArgs e)
     {
         var name = NewInstanceNameBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(name))
@@ -294,16 +322,70 @@ public partial class MainWindow : Window
 
         var loader = (NewInstanceLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "fabric";
 
+        CreateInstanceButton.IsEnabled = false;
+        InstallProgress.IsIndeterminate = true;
+        ProgressText.Text = "СОЗДАНИЕ";
+        StatusText.Text = $"Создаю сборку «{name}» ({version.Id} · {loader})...";
+
         try
         {
             var instance = _minecraft.Instances.CreateInstance(name, version.Id, loader);
+
+            // Список слагов популярных модов, выбранных пользователем
+            var modsToInstall = new List<(string Slug, string Title)>();
+            if (ChkModFabricApi.IsChecked == true && loader is "fabric" or "quilt")
+                modsToInstall.Add(("fabric-api", "Fabric API"));
+            if (ChkModSodium.IsChecked == true && loader is "fabric" or "quilt")
+                modsToInstall.Add(("sodium", "Sodium"));
+            if (ChkModIris.IsChecked == true && loader is "fabric" or "quilt")
+                modsToInstall.Add(("iris", "Iris Shaders"));
+            if (ChkModFerriteCore.IsChecked == true)
+                modsToInstall.Add(("ferrite-core", "FerriteCore"));
+            if (ChkModJei.IsChecked == true)
+                modsToInstall.Add(("jei", "Just Enough Items"));
+
+            int installedMods = 0;
+            int installedDeps = 0;
+
+            foreach (var (slug, title) in modsToInstall)
+            {
+                StatusText.Text = $"Скачиваю {title} и все обязательные зависимости...";
+                try
+                {
+                    var search = await _modrinth.SearchAsync(slug, "mod", loader, version.Id);
+                    var project = search.FirstOrDefault(x => x.Slug.Equals(slug, StringComparison.OrdinalIgnoreCase)) ?? search.FirstOrDefault();
+                    if (project != null)
+                    {
+                        var result = await _modrinth.InstallAsync(project, "mod", loader, version.Id, _minecraft.InstancesRoot);
+                        installedMods++;
+                        installedDeps += result.Dependencies.Count;
+                    }
+                }
+                catch { }
+            }
+
+            InstallProgress.IsIndeterminate = false;
+            InstallProgress.Value = 100;
+            ProgressText.Text = "ГОТОВО";
             LoadLibraryInstances();
-            StatusText.Text = $"Сборка «{instance.Name}» ({version.Id} · {loader}) успешно создана!";
-            MessageBox.Show(this, $"Сборка «{instance.Name}» создана!\nПапка: {instance.FolderPath}\n\nТеперь вы можете выбрать её и запустить из библиотеки.", "Сборка создана", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            var summary = $"Сборка «{instance.Name}» успешно создана!\nПапка: {instance.FolderPath}";
+            if (installedMods > 0)
+            {
+                summary += $"\n\nУстановлено основных модов: {installedMods}\nАвтоматически загружено зависимостей: {installedDeps}";
+            }
+            StatusText.Text = summary.Replace("\n", " ");
+            MessageBox.Show(this, summary, "Сборка создана", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
+            InstallProgress.IsIndeterminate = false;
+            ProgressText.Text = "ОШИБКА";
             MessageBox.Show(this, $"Не удалось создать сборку: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            CreateInstanceButton.IsEnabled = true;
         }
     }
 
@@ -312,7 +394,6 @@ public partial class MainWindow : Window
         if ((sender as FrameworkElement)?.DataContext is not GameInstanceInfo instance) return;
         _activeCustomInstancePath = instance.FolderPath;
 
-        // Sync version and loader dropdowns on Home screen
         foreach (MinecraftVersion v in VersionBox.Items)
         {
             if (v.Id.Equals(instance.Version, StringComparison.OrdinalIgnoreCase))
@@ -517,7 +598,7 @@ public partial class MainWindow : Window
 
         try
         {
-            StatusText.Text = $"Загружаю «{item.Title}» из {item.Platform}…";
+            StatusText.Text = $"Загружаю «{item.Title}» из {item.Platform} вместе с зависимостями…";
 
             string fileName;
             string targetDir;
@@ -525,8 +606,10 @@ public partial class MainWindow : Window
 
             if (item.Platform == "CurseForge" && item.RawProject is CurseForgeProject cfProject)
             {
-                fileName = await _curseforge.InstallAsync(cfProject, type, loader, version, targetInstanceRoot);
-                targetDir = Path.Combine(targetInstanceRoot, $"{version}-{loader.ToLowerInvariant()}", type == "mod" ? "mods" : type);
+                var result = await _curseforge.InstallAsync(cfProject, type, loader, version, targetInstanceRoot);
+                fileName = result.FileName;
+                targetDir = result.TargetDirectory;
+                dependencies = result.Dependencies;
             }
             else if (item.RawProject is ModrinthProject mrProject)
             {
@@ -542,12 +625,17 @@ public partial class MainWindow : Window
 
             if (type == "mod") GameLoaderBox.SelectedIndex = ModLoaderBox.SelectedIndex;
             StatusText.Text = dependencies.Count > 0
-                ? $"Установлено: {fileName}. Зависимостей: {dependencies.Count}. Сборка: {loader}."
+                ? $"Установлено: {fileName}. Автоматически загружено зависимостей: {dependencies.Count}!"
                 : $"Установлено в {targetDir}: {fileName}.";
 
             LoadLibraryInstances();
 
-            MessageBox.Show(this, $"Файл: {fileName}\nПапка: {targetDir}" + (dependencies.Count > 0 ? $"\n\nОбязательные зависимости:\n{string.Join("\n", dependencies)}" : ""), "Загрузка завершена", MessageBoxButton.OK, MessageBoxImage.Information);
+            var message = $"Файл: {fileName}\nПапка: {targetDir}";
+            if (dependencies.Count > 0)
+            {
+                message += $"\n\nАвтоматически загруженные зависимости:\n• {string.Join("\n• ", dependencies)}";
+            }
+            MessageBox.Show(this, message, "Загрузка завершена", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -557,7 +645,101 @@ public partial class MainWindow : Window
     }
 
     // ==========================================
-    // ФОН И АДАПТИВНЫЕ ЦВЕТА (Requirement 4)
+    // УПРАВЛЕНИЕ JAVA RUNTIME (JavaService)
+    // ==========================================
+
+    private void LoadJavaRuntimes()
+    {
+        try
+        {
+            var javas = _minecraft.Java.DetectInstalledJavas();
+            JavaRuntimeBox.ItemsSource = javas;
+            JavaRuntimeBox.SelectedIndex = 0;
+
+            if (!string.IsNullOrWhiteSpace(_selectedJavaPath))
+            {
+                JavaStatusText.Text = $"Пользовательский путь: {_selectedJavaPath}";
+            }
+        }
+        catch { }
+    }
+
+    private void JavaRuntimeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_uiReady || JavaRuntimeBox.SelectedItem is not JavaRuntimeInfo info) return;
+        _selectedJavaPath = info.IsAuto ? null : info.Path;
+        JavaStatusText.Text = info.IsAuto ? "Автоматический выбор (система подберёт подходящую Java)." : $"Используется: {info.Path}";
+        _ = SaveSettingsAsync(_backgroundPath);
+    }
+
+    private void BrowseJava_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Выберите javaw.exe",
+            Filter = "Исполняемый файл Java|javaw.exe;java.exe|Все файлы (*.*)|*.*",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            _selectedJavaPath = dialog.FileName;
+            var ver = JavaService.ProbeJavaVersion(_selectedJavaPath);
+            JavaStatusText.Text = $"Выбрана вручную: {_selectedJavaPath} (Java {ver})";
+            _ = SaveSettingsAsync(_backgroundPath);
+        }
+    }
+
+    // ==========================================
+    // СОХРАНЁННЫЕ АККАУНТЫ (AccountManager)
+    // ==========================================
+
+    private void LoadSavedAccounts()
+    {
+        try
+        {
+            var accounts = _accountManager.GetAccounts();
+            SavedAccountsList.ItemsSource = accounts;
+
+            var active = _accountManager.GetActiveAccount();
+            if (active != null)
+            {
+                SidebarProfile.Text = $"{active.Username} • {active.Type.ToUpperInvariant()}";
+            }
+        }
+        catch { }
+    }
+
+    private void SelectSavedAccount_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not SavedAccount account) return;
+        _accountManager.SetActiveAccount(account.Id);
+        SidebarProfile.Text = $"{account.Username} • {account.Type.ToUpperInvariant()}";
+
+        if (account.Type == "offline")
+        {
+            OfflineNameBox.Text = account.Username;
+            _activeMicrosoftSession = null;
+            _activeElySession = null;
+        }
+        else if (account.Type == "ely" && !string.IsNullOrWhiteSpace(account.AccessToken))
+        {
+            _activeElySession = new MSession(account.Username, account.Uuid ?? "", account.AccessToken) { UserType = "ely" };
+            _activeMicrosoftSession = null;
+        }
+
+        LoadSavedAccounts();
+        StatusText.Text = $"Активный профиль изменён на: {account.Username} ({account.Type}).";
+    }
+
+    private void RemoveSavedAccount_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not SavedAccount account) return;
+        _accountManager.RemoveAccount(account.Id);
+        LoadSavedAccounts();
+    }
+
+    // ==========================================
+    // ФОН И АДАПТИВНЫЕ ЦВЕТА
     // ==========================================
 
     private async void ChooseBackground_Click(object sender, RoutedEventArgs e)
@@ -584,12 +766,10 @@ public partial class MainWindow : Window
 
         if (ext.Equals(".mp4", StringComparison.OrdinalIgnoreCase))
         {
-            // Видео воспроизводится параллельно фоновому изображению
             VideoBackground.Source = new Uri(path);
             VideoBackground.Visibility = Visibility.Visible;
             VideoBackground.Play();
 
-            // Проверяем, есть ли рядом картинка-постер для адаптации цветов
             var companion = Path.ChangeExtension(path, ".jpg");
             if (!File.Exists(companion)) companion = Path.ChangeExtension(path, ".png");
 
@@ -640,9 +820,6 @@ public partial class MainWindow : Window
         catch { return null; }
     }
 
-    /// <summary>
-    /// Автоматически извлекает выразительный доминирующий цвет фона и адаптирует тему оформления.
-    /// </summary>
     private void AdaptThemeColorsFromImage(BitmapSource bitmap)
     {
         try
@@ -672,7 +849,6 @@ public partial class MainWindow : Window
                     var color = Color.FromRgb(r, g, b);
                     var (h, s, v) = ColorToHsv(color);
 
-                    // Ищем цвет с умеренной насыщенностью и хорошей яркостью
                     if (s > 0.30 && v > 0.35 && v < 0.95)
                     {
                         double score = (s * 1.6) + (1.0 - Math.Abs(v - 0.75));
@@ -716,16 +892,25 @@ public partial class MainWindow : Window
     }
 
     // ==========================================
-    // АККАУНТЫ И АВТОРИЗАЦИЯ
+    // АВТОРИЗАЦИЯ
     // ==========================================
 
     private async void SaveOffline_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var profile = await _profiles.SaveAsync(OfflineNameBox.Text.Trim());
-            SidebarProfile.Text = $"{profile.Username} • Offline";
-            StatusText.Text = $"Сохранён локальный профиль {profile.Username} (UUID {profile.Uuid}).";
+            var username = OfflineNameBox.Text.Trim();
+            var profile = await _profiles.SaveAsync(username);
+            _accountManager.SaveAccount(new SavedAccount(
+                Id: $"offline_{username}",
+                Username: username,
+                Type: "offline",
+                Uuid: profile.Uuid,
+                IsActive: true
+            ));
+            SidebarProfile.Text = $"{username} • Offline";
+            StatusText.Text = $"Сохранён локальный профиль {username} (UUID {profile.Uuid}).";
+            LoadSavedAccounts();
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Некорректный ник", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
@@ -741,6 +926,15 @@ public partial class MainWindow : Window
             SidebarProfile.Text = $"{_activeMicrosoftSession.Username} • Microsoft";
             StatusText.Text = $"Официальный вход выполнен: {_activeMicrosoftSession.Username}.";
             MicrosoftLoginButton.Content = "Подключено: " + _activeMicrosoftSession.Username;
+
+            _accountManager.SaveAccount(new SavedAccount(
+                Id: $"ms_{_activeMicrosoftSession.UUID}",
+                Username: _activeMicrosoftSession.Username ?? "Player",
+                Type: "microsoft",
+                Uuid: _activeMicrosoftSession.UUID,
+                IsActive: true
+            ));
+            LoadSavedAccounts();
         }
         catch (Exception ex)
         {
@@ -764,6 +958,17 @@ public partial class MainWindow : Window
             ElyStatusText.Text = $"Подключено: {account.Username}. Скин Ely.by будет загружаться через authlib-injector.";
             ElyLoginButton.Content = "Подключено: " + account.Username;
             StatusText.Text = $"Вход Ely.by выполнен: {account.Username}.";
+
+            _accountManager.SaveAccount(new SavedAccount(
+                Id: $"ely_{account.Uuid}",
+                Username: account.Username,
+                Type: "ely",
+                Uuid: account.Uuid,
+                AccessToken: account.AccessToken,
+                ExpiresAt: account.ExpiresAt,
+                IsActive: true
+            ));
+            LoadSavedAccounts();
         }
         catch (Exception ex)
         {
@@ -815,7 +1020,7 @@ public partial class MainWindow : Window
     }
 
     // ==========================================
-    // НАВИГАЦИЯ И ВНЕШНИЙ ВИД
+    // НАВИГАЦИЯ И ОФОРМЛЕНИЕ
     // ==========================================
 
     private void GameLoaderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -874,6 +1079,7 @@ public partial class MainWindow : Window
             button.SetResourceReference(Control.ForegroundProperty, selected ? "Accent" : "Muted");
         }
         if (MainTabs.SelectedIndex == 1) LoadLibraryInstances();
+        if (MainTabs.SelectedIndex == 3) LoadSavedAccounts();
     }
 
     private void Window_DragMove(object sender, MouseButtonEventArgs e)
@@ -1090,6 +1296,7 @@ public partial class MainWindow : Window
         bool GradientAccent = false, 
         double BackgroundDim = 0.70, 
         string? SecondaryAccentColor = null,
-        string? GameLanguage = "ru"
+        string? GameLanguage = "ru",
+        string? JavaPath = null
     );
 }

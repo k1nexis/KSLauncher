@@ -3,13 +3,14 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.IO;
+using System.IO.Compression;
 
 namespace KSLauncher.App.Services;
 
 public sealed record ModrinthProject(string ProjectId, string Slug, string Title, string Description, long Downloads, string ProjectType);
 public sealed record ModrinthInstallResult(string FileName, IReadOnlyList<string> Dependencies, string TargetDirectory);
 
-/// <summary>Modrinth search and safe client-side downloads into a launch profile.</summary>
+/// <summary>Modrinth search, safe client-side downloads and modpack extractor into a launch profile.</summary>
 public sealed class ModrinthService
 {
     private static readonly HttpClient Client = CreateClient();
@@ -54,7 +55,67 @@ public sealed class ModrinthService
         var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var dependencies = new List<string>();
         var primary = await InstallProjectAsync(project.ProjectId, null, projectType, loader, gameVersion, target, installed, dependencies, cancellationToken);
+
+        if (projectType == "modpack" && primary.EndsWith(".mrpack", StringComparison.OrdinalIgnoreCase))
+        {
+            var downloadedPack = Path.Combine(target, primary);
+            await ExtractModpackAsync(downloadedPack, instance, cancellationToken);
+        }
+
         return new ModrinthInstallResult(primary, dependencies, target);
+    }
+
+    public static async Task ExtractModpackAsync(string mrpackPath, string instanceRoot, CancellationToken ct = default)
+    {
+        if (!File.Exists(mrpackPath)) return;
+
+        using var archive = ZipFile.OpenRead(mrpackPath);
+        var indexEntry = archive.GetEntry("modrinth.index.json");
+        if (indexEntry == null) return;
+
+        using var indexStream = indexEntry.Open();
+        using var doc = await JsonDocument.ParseAsync(indexStream, cancellationToken: ct);
+        var root = doc.RootElement;
+
+        // 1. Extract overrides
+        foreach (var entry in archive.Entries)
+        {
+            if (entry.FullName.StartsWith("overrides/", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(entry.Name))
+            {
+                var relative = entry.FullName["overrides/".Length..];
+                var destPath = Path.Combine(instanceRoot, relative.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+                entry.ExtractToFile(destPath, overwrite: true);
+            }
+        }
+
+        // 2. Download files listed in manifest
+        if (root.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in files.EnumerateArray())
+            {
+                var path = item.GetProperty("path").GetString();
+                if (string.IsNullOrWhiteSpace(path)) continue;
+
+                var downloads = item.GetProperty("downloads").EnumerateArray().Select(x => x.GetString()).Where(x => !string.IsNullOrEmpty(x)).ToArray();
+                if (downloads.Length == 0) continue;
+
+                var fileDest = Path.Combine(instanceRoot, path.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(fileDest)!);
+
+                if (!File.Exists(fileDest))
+                {
+                    var url = downloads[0]!;
+                    using var res = await Client.GetAsync(url, ct);
+                    if (res.IsSuccessStatusCode)
+                    {
+                        await using var src = await res.Content.ReadAsStreamAsync(ct);
+                        await using var dst = File.Create(fileDest);
+                        await src.CopyToAsync(dst, ct);
+                    }
+                }
+            }
+        }
     }
 
     private static async Task<string> InstallProjectAsync(string projectId, string? exactVersionId, string projectType,

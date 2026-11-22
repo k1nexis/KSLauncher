@@ -7,6 +7,7 @@ using CmlLib.Core.ModLoaders.QuiltMC;
 using ForgeInstaller = CmlForge::CmlLib.Core.Installer.Forge.ForgeInstaller;
 using ForgeInstallOptions = CmlForge::CmlLib.Core.Installer.Forge.ForgeInstallOptions;
 using NeoForgeInstaller = CmlLib.Core.Installer.NeoForge.NeoForgeInstaller;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
@@ -17,6 +18,8 @@ public sealed class MinecraftService
 {
     public string InstancesRoot { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KSLauncher", "instances");
     public InstanceManager Instances { get; }
+    public JavaService Java { get; } = new();
+    public GameLogService Logs { get; } = new();
 
     public MinecraftService()
     {
@@ -26,7 +29,7 @@ public sealed class MinecraftService
 
     public string GetInstanceRoot(string version, string loader) => Path.Combine(InstancesRoot, $"{version}-{loader.ToLowerInvariant()}");
 
-    public async Task LaunchAsync(
+    public async Task<Process> LaunchAsync(
         string version, 
         string loader, 
         MSession session, 
@@ -34,7 +37,9 @@ public sealed class MinecraftService
         bool stringDeduplication, 
         string? authlibInjectorPath = null,
         string? customInstanceRoot = null,
-        string? gameLanguage = null)
+        string? gameLanguage = null,
+        string? javaPath = null,
+        Action<int>? onProcessExited = null)
     {
         var root = !string.IsNullOrWhiteSpace(customInstanceRoot) && Directory.Exists(customInstanceRoot)
             ? customInstanceRoot
@@ -51,6 +56,7 @@ public sealed class MinecraftService
         if (!string.IsNullOrWhiteSpace(authlibInjectorPath)) jvmArguments.Add(new MArgument($"-javaagent:{authlibInjectorPath}=ely.by"));
         jvmArguments.Add(new MArgument("-XX:+UseG1GC"));
         if (stringDeduplication) jvmArguments.Add(new MArgument("-XX:+UseStringDeduplication"));
+
         var options = new MLaunchOption
         {
             Session = session,
@@ -61,9 +67,28 @@ public sealed class MinecraftService
             ExtraJvmArguments = jvmArguments
         };
 
+        if (!string.IsNullOrWhiteSpace(javaPath) && File.Exists(javaPath))
+        {
+            options.JavaPath = javaPath;
+        }
+
+        Logs.Clear();
+        Logs.Append($"Подготовка запуска {version} ({loader})...");
+        Logs.Append($"Каталог инстанса: {root}");
+        if (!string.IsNullOrWhiteSpace(javaPath)) Logs.Append($"Используется Java: {javaPath}");
+
         var process = await launcher.InstallAndBuildProcessAsync(launchVersion, options);
         Instances.TouchInstance(root);
+
+        // Redirect outputs for live log console
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+
         process.Start();
+        Logs.AttachToProcess(process, onProcessExited);
+
+        return process;
     }
 
     private static async Task<string> InstallLoaderAsync(string version, string loader, MinecraftPath path, MinecraftLauncher launcher)
@@ -95,7 +120,6 @@ public sealed class MinecraftService
             Directory.CreateDirectory(instanceRoot);
         }
 
-        // 1. Clean temp download files
         int deletedTempCount = 0;
         foreach (var file in Directory.GetFiles(instanceRoot, "*.*", SearchOption.AllDirectories))
         {
@@ -106,7 +130,6 @@ public sealed class MinecraftService
             }
         }
 
-        // 2. Validate mods folder for 0-byte or corrupted archives
         int repairedModsCount = 0;
         var modsFolder = Path.Combine(instanceRoot, "mods");
         if (Directory.Exists(modsFolder))
@@ -121,7 +144,6 @@ public sealed class MinecraftService
                     continue;
                 }
 
-                // Check if zip is readable
                 try
                 {
                     using var zip = ZipFile.OpenRead(jar);
@@ -129,7 +151,6 @@ public sealed class MinecraftService
                 }
                 catch
                 {
-                    // Corrupted jar
                     try
                     {
                         var corruptedPath = jar + ".broken";
@@ -142,7 +163,6 @@ public sealed class MinecraftService
             }
         }
 
-        // 3. Reinstall loader and game core
         onProgress?.Invoke($"Восстановление ядра {loader} и официальных библиотек...");
         var path = new MinecraftPath(instanceRoot);
         var launcher = new MinecraftLauncher(path);
