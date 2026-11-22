@@ -96,15 +96,16 @@
       color: #fff;
     }
 
-    .brand-star {
-      color: var(--neon-yellow);
-      font-size: 22px;
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
       animation: pulseStar 2.5s infinite ease-in-out;
     }
 
     @keyframes pulseStar {
-      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.6)); }
-      50% { transform: scale(1.15); filter: drop-shadow(0 0 12px rgba(250, 204, 21, 1)); }
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(124, 58, 237, 0.6)); }
+      50% { transform: scale(1.1); filter: drop-shadow(0 0 14px rgba(124, 58, 237, 1)); }
     }
 
     .brand-name {
@@ -759,7 +760,7 @@
   <!-- ШАПКА -->
   <header>
     <a href="#" class="brand">
-      <span class="brand-star">★</span>
+      <img src="./favicon.svg" alt="KS" class="brand-icon">
       <span class="brand-name">KS Launcher</span>
       <span class="brand-tag">v0.2.0</span>
     </a>
@@ -777,7 +778,7 @@
         <button type="button" class="lang-btn active" id="btnRu">RU</button>
         <button type="button" class="lang-btn" id="btnEn">EN</button>
       </div>
-      <a href="#download" class="btn-glow" id="headerDlBtn">⚡ Скачать</a>
+      <a href="#download" class="btn-glow" id="headerDlBtn">↓ Скачать</a>
     </div>
   </header>
 
@@ -785,7 +786,7 @@
 
     <!-- ГЛАВНЫЙ ЭКРАН (HERO) -->
     <section class="hero">
-      <div class="hero-kicker" id="heroKicker">★ ОФИЦИАЛЬНЫЙ САЙТ / MINECRAFT LAUNCHER ★</div>
+    <div class="hero-kicker" id="heroKicker">★ ОФИЦИАЛЬНЫЙ САЙТ / MINECRAFT LAUNCHER ★</div>
       
       <h1 class="hero-title">
         <span class="hero-title-top" id="heroTitleTop">KS LAUNCHER</span>
@@ -947,7 +948,7 @@
 
         <div style="margin-top:24px;">
           <a class="btn-hero-primary" id="downloadButton" href="./KSLauncher.exe" download="KSLauncher.exe" style="padding:18px 44px;font-size:18px;">
-            ⚡ СКАЧАТЬ ДЛЯ WINDOWS (RU)
+            ⬇ СКАЧАТЬ ДЛЯ WINDOWS (RU)
           </a>
         </div>
       </div>
@@ -1072,7 +1073,7 @@
     <!-- ПОДВАЛ -->
     <footer>
       <div>
-        <span style="font-weight:800;color:#fff;">★ KS LAUNCHER</span> · Minecraft System 2026
+        <span style="font-weight:800;color:#fff;">KS LAUNCHER</span> · Minecraft System 2026
       </div>
       <div>
         Cloudflare Pages + Workers + D1 + R2 Storage
@@ -1096,7 +1097,7 @@
         navMods: "Моды",
         navDownload: "Скачать",
         navCabinet: "Личный кабинет",
-        headerDlBtn: "⚡ Скачать",
+        headerDlBtn: "↓ Скачать",
         heroKicker: "★ ОФИЦИАЛЬНЫЙ САЙТ / MINECRAFT LAUNCHER ★",
         heroTitleTop: "KS LAUNCHER",
         heroTitleBottom: "NEXT GENERATION",
@@ -1112,8 +1113,8 @@
         dlMainTitle: "Загрузить KS Launcher",
         dlMainDesc: "Быстрая установка. Лаунчер полностью готов к игре на любых версиях Minecraft.",
         dlLangLabel: "Язык интерфейса лаунчера:",
-        dlBtnRu: "⚡ СКАЧАТЬ ДЛЯ WINDOWS (RU)",
-        dlBtnEn: "⚡ DOWNLOAD FOR WINDOWS (EN)",
+        dlBtnRu: "⬇ СКАЧАТЬ ДЛЯ WINDOWS (RU)",
+        dlBtnEn: "⬇ DOWNLOAD FOR WINDOWS (EN)",
         lblVersion: "Версия:",
         lblSize: "Размер файла:",
         lblOs: "ОС:",
@@ -1144,7 +1145,7 @@
         navMods: "Mods",
         navDownload: "Download",
         navCabinet: "Dashboard",
-        headerDlBtn: "⚡ Download",
+        headerDlBtn: "↓ Download",
         heroKicker: "★ OFFICIAL MINECRAFT LAUNCHER ★",
         heroTitleTop: "KS LAUNCHER",
         heroTitleBottom: "NEXT GENERATION",
@@ -1160,8 +1161,8 @@
         dlMainTitle: "Download KS Launcher",
         dlMainDesc: "Fast setup. The launcher is fully prepared to run all Minecraft versions.",
         dlLangLabel: "Launcher UI Language:",
-        dlBtnRu: "⚡ DOWNLOAD FOR WINDOWS (RU)",
-        dlBtnEn: "⚡ DOWNLOAD FOR WINDOWS (EN)",
+        dlBtnRu: "⬇ DOWNLOAD FOR WINDOWS (RU)",
+        dlBtnEn: "⬇ DOWNLOAD FOR WINDOWS (EN)",
         lblVersion: "Version:",
         lblSize: "File size:",
         lblOs: "OS:",
