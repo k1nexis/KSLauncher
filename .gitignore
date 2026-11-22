@@ -1,0 +1,8 @@
+.vs/
+**/bin/
+**/obj/
+cloudflare/node_modules/
+cloudflare/.wrangler/
+cloudflare/.dev.vars
+*.user
+*.suo

@@ -1,0 +1,16 @@
+name = "kslauncher-api"
+main = "src/index.ts"
+compatibility_date = "2026-11-14"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kslauncher"
+database_id = "e8f205f1-d779-4861-8cc7-a2b765bdfbe3"
+migrations_dir = "migrations"
+
+[vars]
+ALLOWED_ORIGIN = "https://kslauncher.pages.dev"
+TOKEN_ISSUER = "kslauncher"
+ELY_REDIRECT_URI = "https://kslauncher-api.nerck522.workers.dev/v1/ely/callback"
+# Set TOKEN_SECRET with: wrangler secret put TOKEN_SECRET
+# Set ELY_CLIENT_ID and ELY_CLIENT_SECRET as Worker secrets. Register the exact redirect URI above in Ely.by.
