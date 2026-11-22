@@ -101,7 +101,7 @@ async function issueSession(userId: string, env: Env) {
 function validateIdentity(email: unknown, username: unknown, password: unknown) {
   if (typeof email!=='string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length>254) return 'Некорректный email';
   if (typeof username!=='string' || !/^[A-Za-z0-9_]{3,16}$/.test(username)) return 'Ник: 3–16 символов A–Z, 0–9 или _';
-  if (typeof password!=='string' || password.length<12 || password.length>128) return 'Пароль должен содержать не менее 12 символов';
+  if (typeof password!=='string' || password.length<8 || password.length>128) return 'Пароль должен содержать не менее 8 символов';
   return null;
 }
 
