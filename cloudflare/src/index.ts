@@ -108,7 +108,20 @@ function validateIdentity(email: unknown, username: unknown, password: unknown) 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url), origin = request.headers.get('origin');
-    const headers = { 'access-control-allow-origin': origin===env.ALLOWED_ORIGIN ? env.ALLOWED_ORIGIN : 'null', 'access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS', 'access-control-allow-headers':'content-type,authorization', 'vary':'Origin' };
+    const isAllowedOrigin = (
+      origin === env.ALLOWED_ORIGIN ||
+      origin === 'https://kslauncher.com' ||
+      origin === 'https://www.kslauncher.com' ||
+      origin === 'https://kslauncher.pages.dev' ||
+      origin === 'https://kslauncher-com.pages.dev' ||
+      (origin && origin.endsWith('.pages.dev'))
+    );
+    const headers = {
+      'access-control-allow-origin': isAllowedOrigin && origin ? origin : (env.ALLOWED_ORIGIN || '*'),
+      'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
+      'access-control-allow-headers': 'content-type,authorization',
+      'vary': 'Origin'
+    };
     if (request.method==='OPTIONS') return new Response(null,{status:204,headers});
 
     // Auto-clean expired records in background
