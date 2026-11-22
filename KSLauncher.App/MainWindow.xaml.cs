@@ -13,10 +13,23 @@ using CmlLib.Core.Auth;
 
 namespace KSLauncher.App;
 
+public sealed record UnifiedModItem(
+    string Id,
+    string Slug,
+    string Title,
+    string Description,
+    long Downloads,
+    string ProjectType,
+    string Platform,
+    string PlatformColor,
+    object RawProject
+);
+
 public partial class MainWindow : Window
 {
     private readonly MinecraftService _minecraft = new();
     private readonly ModrinthService _modrinth = new();
+    private readonly CurseForgeService _curseforge = new();
     private readonly MinecraftVersionService _versions = new();
     private readonly OfflineProfileStore _profiles = new();
     private readonly MicrosoftAccountService _microsoft = new();
@@ -24,6 +37,7 @@ public partial class MainWindow : Window
     private readonly AuthlibInjectorService _authlibInjector = new();
     private readonly CloudAccountService _cloud = new();
     private readonly string _settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KSLauncher", "launcher-settings.json");
+
     private MSession? _activeMicrosoftSession;
     private MSession? _activeElySession;
     private IReadOnlyList<MinecraftVersion> _allVersions = [];
@@ -39,6 +53,8 @@ public partial class MainWindow : Window
     private bool _pendingGradientAccent;
     private bool _selectingSecondaryWheel;
     private bool _suppressSettingsWrites;
+    private string _gameLanguage = "ru";
+    private string? _activeCustomInstancePath;
 
     public MainWindow()
     {
@@ -58,6 +74,7 @@ public partial class MainWindow : Window
         await RestoreProfileAsync();
         await RestoreSettingsAsync();
         await LoadVersionsAsync();
+        LoadLibraryInstances();
     }
 
     private async Task LoadVersionsAsync()
@@ -71,6 +88,9 @@ public partial class MainWindow : Window
             VersionBox.SelectedIndex = 0;
             ModVersionBox.ItemsSource = _allVersions;
             ModVersionBox.SelectedIndex = 0;
+            NewInstanceVersionBox.ItemsSource = _allVersions;
+            NewInstanceVersionBox.SelectedIndex = 0;
+
             StatusText.Text = IncludeSnapshotsBox.IsChecked == true
                 ? $"Доступно версий Minecraft, включая snapshots и старые: {_allVersions.Count}."
                 : $"Доступно релизов Minecraft: {_allVersions.Count}.";
@@ -100,20 +120,39 @@ public partial class MainWindow : Window
             _suppressVersionReload = true;
             IncludeSnapshotsBox.IsChecked = settings?.IncludeSnapshots == true;
             _suppressVersionReload = false;
-              _accentColor = IsHexColor(settings?.AccentColor) ? settings!.AccentColor! : "#A6F36B";
-              _secondaryAccentColor = IsHexColor(settings?.SecondaryAccentColor) ? settings!.SecondaryAccentColor! : GetComplementaryAccent(_accentColor);
-              _pendingAccentColor = _accentColor;
-              _pendingSecondaryAccentColor = _secondaryAccentColor;
-              _gradientAccent = settings?.GradientAccent == true;
-              _pendingGradientAccent = _gradientAccent;
-              GradientAccentBox.IsChecked = _pendingGradientAccent;
-              UpdateColorWheelLayout();
-              ApplyAccentTheme();
-              UpdatePendingColorPreview();
-              _backgroundDim = settings?.BackgroundDim is >= 0.25 and <= 0.9 ? settings.BackgroundDim : 0.70;
-              BackgroundDimSlider.Value = _backgroundDim;
-              BackgroundScrim.Opacity = _backgroundDim;
-            if (!string.IsNullOrWhiteSpace(settings?.BackgroundPath) && File.Exists(settings.BackgroundPath)) ApplyBackground(settings.BackgroundPath);
+
+            _accentColor = IsHexColor(settings?.AccentColor) ? settings!.AccentColor! : "#A6F36B";
+            _secondaryAccentColor = IsHexColor(settings?.SecondaryAccentColor) ? settings!.SecondaryAccentColor! : GetComplementaryAccent(_accentColor);
+            _pendingAccentColor = _accentColor;
+            _pendingSecondaryAccentColor = _secondaryAccentColor;
+            _gradientAccent = settings?.GradientAccent == true;
+            _pendingGradientAccent = _gradientAccent;
+            GradientAccentBox.IsChecked = _pendingGradientAccent;
+            UpdateColorWheelLayout();
+            ApplyAccentTheme();
+            UpdatePendingColorPreview();
+
+            _backgroundDim = settings?.BackgroundDim is >= 0.25 and <= 0.9 ? settings.BackgroundDim : 0.70;
+            BackgroundDimSlider.Value = _backgroundDim;
+            BackgroundScrim.Opacity = _backgroundDim;
+
+            if (!string.IsNullOrWhiteSpace(settings?.GameLanguage))
+            {
+                _gameLanguage = settings.GameLanguage;
+                foreach (ComboBoxItem item in GameLanguageBox.Items)
+                {
+                    if (item.Tag?.ToString() == _gameLanguage)
+                    {
+                        GameLanguageBox.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(settings?.BackgroundPath) && File.Exists(settings.BackgroundPath))
+            {
+                ApplyBackground(settings.BackgroundPath);
+            }
         }
         catch (Exception ex) { BackgroundStatusText.Text = $"Не удалось открыть сохранённый фон: {ex.Message}"; }
         finally { _suppressSettingsWrites = false; }
@@ -123,8 +162,20 @@ public partial class MainWindow : Window
     {
         _backgroundPath = backgroundPath;
         Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
-          await File.WriteAllTextAsync(_settingsPath, JsonSerializer.Serialize(new LauncherSettings(backgroundPath, IncludeSnapshotsBox.IsChecked == true, _accentColor, _gradientAccent, _backgroundDim, _secondaryAccentColor), new JsonSerializerOptions { WriteIndented = true }));
+        await File.WriteAllTextAsync(_settingsPath, JsonSerializer.Serialize(new LauncherSettings(
+            backgroundPath,
+            IncludeSnapshotsBox.IsChecked == true,
+            _accentColor,
+            _gradientAccent,
+            _backgroundDim,
+            _secondaryAccentColor,
+            _gameLanguage
+        ), new JsonSerializerOptions { WriteIndented = true }));
     }
+
+    // ==========================================
+    // ЗАПУСК ИГРЫ
+    // ==========================================
 
     private async void Play_Click(object sender, RoutedEventArgs e)
     {
@@ -133,15 +184,19 @@ public partial class MainWindow : Window
         var loader = (GameLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "vanilla";
         var username = OfflineNameBox.Text.Trim();
         var ramMb = (int)RamSlider.Value * 1024;
+
         if (ramMb > JvmTuning.RecommendedHeapMb + 1024)
         {
             var answer = MessageBox.Show(this, "Выделено почти столько же памяти, сколько рекомендует система. Это может замедлить Windows. Продолжить?", "Проверка памяти", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (answer != MessageBoxResult.Yes) return;
         }
+
         PlayButton.IsEnabled = false;
+        QuickRepairButton.Visibility = Visibility.Collapsed;
         InstallProgress.Value = 0;
         ProgressText.Text = "УСТАНОВКА";
-        StatusText.Text = $"Проверяю файлы Minecraft {version}. При первом запуске потребуется скачать игровые файлы.";
+        StatusText.Text = $"Проверяю файлы Minecraft {version} ({loader}). При первом запуске потребуется скачать игровые файлы.";
+
         try
         {
             var session = _activeMicrosoftSession;
@@ -158,63 +213,341 @@ public partial class MainWindow : Window
                 session = MSession.CreateOfflineSession(username);
                 SidebarProfile.Text = $"{username} • Offline";
             }
-            else if (_activeMicrosoftSession is not null) SidebarProfile.Text = $"{session.Username} • Microsoft";
+            else if (_activeMicrosoftSession is not null)
+            {
+                SidebarProfile.Text = $"{session.Username} • Microsoft";
+            }
+
             InstallProgress.IsIndeterminate = true;
-            await _minecraft.LaunchAsync(version, loader, session, ramMb, StringDedupBox.IsChecked == true, authlibInjectorPath);
+            await _minecraft.LaunchAsync(
+                version: version,
+                loader: loader,
+                session: session,
+                ramMb: ramMb,
+                stringDeduplication: StringDedupBox.IsChecked == true,
+                authlibInjectorPath: authlibInjectorPath,
+                customInstanceRoot: _activeCustomInstancePath,
+                gameLanguage: _gameLanguage
+            );
+
             InstallProgress.IsIndeterminate = false;
             InstallProgress.Value = 100;
             ProgressText.Text = "ЗАПУЩЕНО";
-            StatusText.Text = $"Minecraft {version} запущен для {session.Username}.";
+            StatusText.Text = $"Minecraft {version} ({loader}) успешно запущен для {session.Username}!";
+            LoadLibraryInstances();
         }
         catch (Exception ex)
         {
             InstallProgress.IsIndeterminate = false;
             ProgressText.Text = "ОШИБКА";
-            StatusText.Text = ex.Message;
-            MessageBox.Show(this, ex.Message, "Не удалось запустить Minecraft", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusText.Text = $"Ошибка запуска: {ex.Message}";
+            QuickRepairButton.Visibility = Visibility.Visible;
+            MessageBox.Show(this, $"{ex.Message}\n\nВы можете воспользоваться кнопкой «Починить сборку» для восстановления файлов.", "Не удалось запустить Minecraft", MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { PlayButton.IsEnabled = true; }
+        finally
+        {
+            PlayButton.IsEnabled = true;
+        }
+    }
+
+    private void GameLanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_uiReady || _suppressSettingsWrites) return;
+        _gameLanguage = (GameLanguageBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "ru";
+        _ = SaveSettingsAsync(_backgroundPath);
+    }
+
+    // ==========================================
+    // БИБЛИОТЕКА И УПРАВЛЕНИЕ СБОРКАМИ (Requirement 1 & 10)
+    // ==========================================
+
+    private void LoadLibraryInstances()
+    {
+        try
+        {
+            var instances = _minecraft.Instances.GetInstances();
+            LibraryInstancesList.ItemsSource = instances;
+        }
+        catch { }
+    }
+
+    private void RefreshLibrary_Click(object sender, RoutedEventArgs e)
+    {
+        LoadLibraryInstances();
+        StatusText.Text = "Список сборок в библиотеке обновлён.";
+    }
+
+    private void CreateInstance_Click(object sender, RoutedEventArgs e)
+    {
+        var name = NewInstanceNameBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            MessageBox.Show(this, "Укажите название новой версии.", "Создание сборки", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (NewInstanceVersionBox.SelectedItem is not MinecraftVersion version)
+        {
+            MessageBox.Show(this, "Выберите версию Minecraft.", "Создание сборки", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var loader = (NewInstanceLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "fabric";
+
+        try
+        {
+            var instance = _minecraft.Instances.CreateInstance(name, version.Id, loader);
+            LoadLibraryInstances();
+            StatusText.Text = $"Сборка «{instance.Name}» ({version.Id} · {loader}) успешно создана!";
+            MessageBox.Show(this, $"Сборка «{instance.Name}» создана!\nПапка: {instance.FolderPath}\n\nТеперь вы можете выбрать её и запустить из библиотеки.", "Сборка создана", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Не удалось создать сборку: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void LaunchLibraryInstance_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not GameInstanceInfo instance) return;
+        _activeCustomInstancePath = instance.FolderPath;
+
+        // Sync version and loader dropdowns on Home screen
+        foreach (MinecraftVersion v in VersionBox.Items)
+        {
+            if (v.Id.Equals(instance.Version, StringComparison.OrdinalIgnoreCase))
+            {
+                VersionBox.SelectedItem = v;
+                break;
+            }
+        }
+
+        for (int i = 0; i < GameLoaderBox.Items.Count; i++)
+        {
+            if ((GameLoaderBox.Items[i] as ComboBoxItem)?.Tag?.ToString() == instance.Loader)
+            {
+                GameLoaderBox.SelectedIndex = i;
+                break;
+            }
+        }
+
+        ProfileSummaryText.Text = $"{instance.Name} ({instance.Loader} · {instance.Version})";
+        NavigateTo(0);
+        Play_Click(sender, e);
+    }
+
+    private async void RepairInstance_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not GameInstanceInfo instance) return;
+        await RunRepairWorkflowAsync(instance.FolderPath, instance.Version, instance.Loader, instance.Name);
+    }
+
+    private async void QuickRepair_Click(object sender, RoutedEventArgs e)
+    {
+        var version = (VersionBox.SelectedItem as MinecraftVersion)?.Id ?? "1.20.4";
+        var loader = (GameLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "vanilla";
+        var path = _activeCustomInstancePath ?? _minecraft.GetInstanceRoot(version, loader);
+        await RunRepairWorkflowAsync(path, version, loader, "Текущая сборка");
+    }
+
+    private async Task RunRepairWorkflowAsync(string instanceRoot, string version, string loader, string instanceName)
+    {
+        var confirm = MessageBox.Show(this,
+            $"Запустить восстановление «{instanceName}»?\n\nЛаунчер:\n1. Очистит повреждённые временные файлы и битый кэш.\n2. Проверит и исключит повреждённые моды в папке mods.\n3. Заново переустановит ядро {loader} и официальные библиотеки игры.\n\nВаши сохранения миров, скриншоты и настройки останутся нетронутыми.",
+            "Починить сборку", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes) return;
+
+        PlayButton.IsEnabled = false;
+        InstallProgress.IsIndeterminate = true;
+        ProgressText.Text = "ПОЧИНКА";
+        StatusText.Text = $"Восстанавливаю сборку {instanceName}…";
+
+        try
+        {
+            var report = await _minecraft.RepairInstanceAsync(instanceRoot, version, loader, progress =>
+            {
+                Dispatcher.Invoke(() => StatusText.Text = progress);
+            });
+
+            InstallProgress.IsIndeterminate = false;
+            InstallProgress.Value = 100;
+            ProgressText.Text = "ПОЧИНЕНО";
+            StatusText.Text = $"Сборка «{instanceName}» полностью починена и готова к запуску!";
+            QuickRepairButton.Visibility = Visibility.Collapsed;
+            LoadLibraryInstances();
+            MessageBox.Show(this, report, "Восстановление завершено", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            InstallProgress.IsIndeterminate = false;
+            ProgressText.Text = "ОШИБКА";
+            StatusText.Text = $"Ошибка починки: {ex.Message}";
+            MessageBox.Show(this, $"Не удалось завершить восстановление: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            PlayButton.IsEnabled = true;
+        }
+    }
+
+    private void OpenInstanceFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not GameInstanceInfo instance) return;
+        if (Directory.Exists(instance.FolderPath))
+        {
+            Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = instance.FolderPath, UseShellExecute = true });
+        }
+    }
+
+    private void DeleteInstance_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not GameInstanceInfo instance) return;
+        var answer = MessageBox.Show(this, $"Удалить сборку «{instance.Name}» ({instance.FolderPath})?\nВсе моды и файлы этой сборки будут удалены.", "Удаление сборки", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer == MessageBoxResult.Yes)
+        {
+            try
+            {
+                _minecraft.Instances.DeleteInstance(instance.FolderPath);
+                LoadLibraryInstances();
+                StatusText.Text = $"Сборка «{instance.Name}» удалена.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Ошибка удаления: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
+    // ==========================================
+    // КАТАЛОГ МОДОВ (Modrinth & CurseForge, Enter-search, Styling)
+    // ==========================================
+
+    private void ModSearchBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            SearchMods_Click(sender, e);
+        }
+    }
+
+    private void ModSourceBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_uiReady) return;
+        var platform = (ModSourceBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "modrinth";
+        StatusText.Text = $"Выбран источник модов: {(platform == "curseforge" ? "CurseForge" : "Modrinth")}. Нажмите Enter или «Найти моды».";
     }
 
     private async void SearchMods_Click(object sender, RoutedEventArgs e)
     {
+        var platform = (ModSourceBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "modrinth";
         var selectedType = ProjectTypeBox.SelectedItem as ComboBoxItem;
         var projectType = selectedType?.Tag?.ToString() ?? "mod";
         var selectedLoader = ModLoaderBox.SelectedItem as ComboBoxItem;
         var loader = selectedLoader?.Tag?.ToString() ?? "fabric";
         var gameVersion = (ModVersionBox.SelectedItem as MinecraftVersion)?.Id ?? "";
+        var query = ModSearchBox.Text.Trim();
+
+        SearchModsButton.IsEnabled = false;
         try
         {
-            StatusText.Text = "Поиск по каталогу Modrinth…";
-            var results = await _modrinth.SearchAsync(ModSearchBox.Text.Trim(), projectType, loader, gameVersion);
-            ModsList.ItemsSource = results;
-            StatusText.Text = $"Найдено проектов: {results.Count}. Выберите «Скачать в лаунчер» для загрузки.";
-        }
-        catch (Exception ex) { StatusText.Text = $"Каталог недоступен: {ex.Message}"; }
-    }
+            StatusText.Text = $"Поиск в {(platform == "curseforge" ? "CurseForge" : "Modrinth")}…";
+            var unifiedList = new List<UnifiedModItem>();
 
-    private void OpenMod_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is not ModrinthProject project) return;
-        Process.Start(new ProcessStartInfo($"https://modrinth.com/{project.ProjectType}/{project.Slug}") { UseShellExecute = true });
+            if (platform == "curseforge")
+            {
+                var cfResults = await _curseforge.SearchAsync(query, projectType, loader, gameVersion);
+                foreach (var cf in cfResults)
+                {
+                    unifiedList.Add(new UnifiedModItem(
+                        Id: cf.Id.ToString(),
+                        Slug: cf.Slug,
+                        Title: cf.Title,
+                        Description: string.IsNullOrWhiteSpace(cf.Description) ? "Описание отсутствует." : cf.Description,
+                        Downloads: cf.Downloads,
+                        ProjectType: cf.ProjectType,
+                        Platform: "CurseForge",
+                        PlatformColor: "#FF8C42",
+                        RawProject: cf
+                    ));
+                }
+            }
+            else
+            {
+                var mrResults = await _modrinth.SearchAsync(query, projectType, loader, gameVersion);
+                foreach (var mr in mrResults)
+                {
+                    unifiedList.Add(new UnifiedModItem(
+                        Id: mr.ProjectId,
+                        Slug: mr.Slug,
+                        Title: mr.Title,
+                        Description: string.IsNullOrWhiteSpace(mr.Description) ? "Описание отсутствует." : mr.Description,
+                        Downloads: mr.Downloads,
+                        ProjectType: mr.ProjectType,
+                        Platform: "Modrinth",
+                        PlatformColor: "#A6F36B",
+                        RawProject: mr
+                    ));
+                }
+            }
+
+            ModsList.ItemsSource = unifiedList;
+            StatusText.Text = $"Найдено проектов в {platform}: {unifiedList.Count}. Нажмите «Скачать в лаунчере» для установки.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Каталог {platform} недоступен: {ex.Message}";
+        }
+        finally
+        {
+            SearchModsButton.IsEnabled = true;
+        }
     }
 
     private async void InstallMod_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is not ModrinthProject project) return;
+        if ((sender as FrameworkElement)?.DataContext is not UnifiedModItem item) return;
         var type = (ProjectTypeBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "mod";
         var loader = (ModLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "fabric";
         var version = (ModVersionBox.SelectedItem as MinecraftVersion)?.Id;
         if (version is null) { StatusText.Text = "Выберите версию Minecraft."; return; }
+
+        var targetInstanceRoot = _activeCustomInstancePath ?? _minecraft.InstancesRoot;
+
         try
         {
-            StatusText.Text = $"Загружаю {project.Title} и обязательные зависимости…";
-            var result = await _modrinth.InstallAsync(project, type, loader, version, _minecraft.InstancesRoot);
+            StatusText.Text = $"Загружаю «{item.Title}» из {item.Platform}…";
+
+            string fileName;
+            string targetDir;
+            IReadOnlyList<string> dependencies = [];
+
+            if (item.Platform == "CurseForge" && item.RawProject is CurseForgeProject cfProject)
+            {
+                fileName = await _curseforge.InstallAsync(cfProject, type, loader, version, targetInstanceRoot);
+                targetDir = Path.Combine(targetInstanceRoot, $"{version}-{loader.ToLowerInvariant()}", type == "mod" ? "mods" : type);
+            }
+            else if (item.RawProject is ModrinthProject mrProject)
+            {
+                var result = await _modrinth.InstallAsync(mrProject, type, loader, version, targetInstanceRoot);
+                fileName = result.FileName;
+                targetDir = result.TargetDirectory;
+                dependencies = result.Dependencies;
+            }
+            else
+            {
+                throw new InvalidOperationException("Неизвестный тип проекта.");
+            }
+
             if (type == "mod") GameLoaderBox.SelectedIndex = ModLoaderBox.SelectedIndex;
-            StatusText.Text = result.Dependencies.Count > 0
-                ? $"Установлено в {result.TargetDirectory}. Зависимостей: {result.Dependencies.Count}. Для запуска модов нужен профиль {loader}."
-                : $"Установлено в {result.TargetDirectory}. Для модов нужен загрузчик {loader}; для шейдеров — совместимый шейдерный мод.";
-            MessageBox.Show(this, $"Файл: {result.FileName}\nПапка: {result.TargetDirectory}" + (result.Dependencies.Count > 0 ? $"\n\nОбязательные зависимости:\n{string.Join("\n", result.Dependencies)}" : ""), "Загрузка завершена", MessageBoxButton.OK, MessageBoxImage.Information);
+            StatusText.Text = dependencies.Count > 0
+                ? $"Установлено: {fileName}. Зависимостей: {dependencies.Count}. Сборка: {loader}."
+                : $"Установлено в {targetDir}: {fileName}.";
+
+            LoadLibraryInstances();
+
+            MessageBox.Show(this, $"Файл: {fileName}\nПапка: {targetDir}" + (dependencies.Count > 0 ? $"\n\nОбязательные зависимости:\n{string.Join("\n", dependencies)}" : ""), "Загрузка завершена", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -222,6 +555,169 @@ public partial class MainWindow : Window
             MessageBox.Show(this, ex.Message, "Ошибка загрузки", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
+
+    // ==========================================
+    // ФОН И АДАПТИВНЫЕ ЦВЕТА (Requirement 4)
+    // ==========================================
+
+    private async void ChooseBackground_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Фон KS Launcher",
+            Filter = "Изображения и видео|*.png;*.jpg;*.jpeg;*.bmp;*.mp4|Изображения|*.png;*.jpg;*.jpeg;*.bmp|Видео MP4|*.mp4",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            ApplyBackground(dialog.FileName);
+            await SaveSettingsAsync(dialog.FileName);
+        }
+        catch (Exception ex) { BackgroundStatusText.Text = $"Не удалось установить фон: {ex.Message}"; }
+    }
+
+    private void ApplyBackground(string path)
+    {
+        _backgroundPath = path;
+        var ext = Path.GetExtension(path);
+
+        if (ext.Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            // Видео воспроизводится параллельно фоновому изображению
+            VideoBackground.Source = new Uri(path);
+            VideoBackground.Visibility = Visibility.Visible;
+            VideoBackground.Play();
+
+            // Проверяем, есть ли рядом картинка-постер для адаптации цветов
+            var companion = Path.ChangeExtension(path, ".jpg");
+            if (!File.Exists(companion)) companion = Path.ChangeExtension(path, ".png");
+
+            if (File.Exists(companion))
+            {
+                var bitmap = LoadBitmapSafely(companion);
+                if (bitmap != null)
+                {
+                    ImageBackground.Source = bitmap;
+                    ImageBackground.Visibility = Visibility.Visible;
+                    AdaptThemeColorsFromImage(bitmap);
+                }
+            }
+            else if (ImageBackground.Source is BitmapSource existingBitmap)
+            {
+                AdaptThemeColorsFromImage(existingBitmap);
+            }
+            BackgroundStatusText.Text = $"{Path.GetFileName(path)} (Видео + адаптированные цвета)";
+        }
+        else
+        {
+            VideoBackground.Stop();
+            VideoBackground.Source = null;
+            VideoBackground.Visibility = Visibility.Collapsed;
+
+            var bitmap = LoadBitmapSafely(path);
+            if (bitmap != null)
+            {
+                ImageBackground.Source = bitmap;
+                ImageBackground.Visibility = Visibility.Visible;
+                AdaptThemeColorsFromImage(bitmap);
+            }
+            BackgroundStatusText.Text = $"{Path.GetFileName(path)} (Цвета темы адаптированы)";
+        }
+    }
+
+    private static BitmapImage? LoadBitmapSafely(string path)
+    {
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.UriSource = new Uri(path);
+            image.EndInit();
+            return image;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Автоматически извлекает выразительный доминирующий цвет фона и адаптирует тему оформления.
+    /// </summary>
+    private void AdaptThemeColorsFromImage(BitmapSource bitmap)
+    {
+        try
+        {
+            var formatted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
+            int width = formatted.PixelWidth;
+            int height = formatted.PixelHeight;
+            if (width <= 0 || height <= 0) return;
+
+            int stepX = Math.Max(1, width / 20);
+            int stepY = Math.Max(1, height / 20);
+            var stride = width * 4;
+            var pixels = new byte[stride * height];
+            formatted.CopyPixels(pixels, stride, 0);
+
+            double bestScore = -1;
+            Color bestColor = (Color)ColorConverter.ConvertFromString("#A6F36B");
+
+            for (int y = 0; y < height; y += stepY)
+            {
+                for (int x = 0; x < width; x += stepX)
+                {
+                    int index = (y * stride) + (x * 4);
+                    byte b = pixels[index];
+                    byte g = pixels[index + 1];
+                    byte r = pixels[index + 2];
+                    var color = Color.FromRgb(r, g, b);
+                    var (h, s, v) = ColorToHsv(color);
+
+                    // Ищем цвет с умеренной насыщенностью и хорошей яркостью
+                    if (s > 0.30 && v > 0.35 && v < 0.95)
+                    {
+                        double score = (s * 1.6) + (1.0 - Math.Abs(v - 0.75));
+                        if (score > bestScore)
+                        {
+                            bestScore = score;
+                            bestColor = HsvToColor(h, Math.Min(1.0, s * 1.15), Math.Clamp(v * 1.15, 0.70, 0.96));
+                        }
+                    }
+                }
+            }
+
+            if (bestScore > 0)
+            {
+                _accentColor = ToHex(bestColor);
+                _secondaryAccentColor = GetComplementaryAccent(_accentColor);
+                _pendingAccentColor = _accentColor;
+                _pendingSecondaryAccentColor = _secondaryAccentColor;
+                ApplyAccentTheme();
+                UpdatePendingColorPreview();
+            }
+        }
+        catch { }
+    }
+
+    private async void ClearBackground_Click(object sender, RoutedEventArgs e)
+    {
+        VideoBackground.Stop();
+        VideoBackground.Source = null;
+        VideoBackground.Visibility = Visibility.Collapsed;
+        ImageBackground.Source = null;
+        ImageBackground.Visibility = Visibility.Collapsed;
+        BackgroundStatusText.Text = "Используется стандартный фон";
+        await SaveSettingsAsync(null);
+    }
+
+    private void VideoBackground_MediaEnded(object sender, RoutedEventArgs e)
+    {
+        VideoBackground.Position = TimeSpan.Zero;
+        VideoBackground.Play();
+    }
+
+    // ==========================================
+    // АККАУНТЫ И АВТОРИЗАЦИЯ
+    // ==========================================
 
     private async void SaveOffline_Click(object sender, RoutedEventArgs e)
     {
@@ -295,7 +791,12 @@ public partial class MainWindow : Window
 
     private async void CloudLogout_Click(object sender, RoutedEventArgs e)
     {
-        try { await _cloud.LogoutAsync(CloudUrlBox.Text); CloudStatusText.Text = "Сессия KS System завершена."; CloudLogoutButton.IsEnabled = false; }
+        try
+        {
+            await _cloud.LogoutAsync(CloudUrlBox.Text);
+            CloudStatusText.Text = "Сессия KS System завершена.";
+            CloudLogoutButton.IsEnabled = false;
+        }
         catch (Exception ex) { CloudStatusText.Text = ex.Message; }
     }
 
@@ -305,45 +806,18 @@ public partial class MainWindow : Window
     {
         var dialog = new OpenFileDialog { Title = kind == "skin" ? "Выберите PNG скин" : "Выберите PNG плащ", Filter = "PNG (*.png)|*.png", CheckFileExists = true };
         if (dialog.ShowDialog(this) != true) return;
-        try { await _cloud.UploadPngAsync(CloudUrlBox.Text, kind, dialog.FileName); CloudStatusText.Text = $"{(kind == "skin" ? "Скин" : "Плащ")} загружен в KS System."; }
+        try
+        {
+            await _cloud.UploadPngAsync(CloudUrlBox.Text, kind, dialog.FileName);
+            CloudStatusText.Text = $"{(kind == "skin" ? "Скин" : "Плащ")} загружен в KS System.";
+        }
         catch (Exception ex) { CloudStatusText.Text = ex.Message; }
     }
 
-    private async void ChooseBackground_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFileDialog { Title = "Фон KS Launcher", Filter = "Изображения и видео|*.png;*.jpg;*.jpeg;*.bmp;*.mp4|Изображения|*.png;*.jpg;*.jpeg;*.bmp|Видео MP4|*.mp4", CheckFileExists = true };
-        if (dialog.ShowDialog(this) != true) return;
-        try { ApplyBackground(dialog.FileName); await SaveSettingsAsync(dialog.FileName); }
-        catch (Exception ex) { BackgroundStatusText.Text = $"Не удалось установить фон: {ex.Message}"; }
-    }
+    // ==========================================
+    // НАВИГАЦИЯ И ВНЕШНИЙ ВИД
+    // ==========================================
 
-    private void ApplyBackground(string path)
-    {
-        _backgroundPath = path;
-        VideoBackground.Stop();
-        if (Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-        {
-            ImageBackground.Source = null; ImageBackground.Visibility = Visibility.Collapsed;
-            VideoBackground.Source = new Uri(path); VideoBackground.Visibility = Visibility.Visible; VideoBackground.Play();
-        }
-        else
-        {
-            VideoBackground.Source = null; VideoBackground.Visibility = Visibility.Collapsed;
-            var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad; image.UriSource = new Uri(path); image.EndInit();
-            ImageBackground.Source = image; ImageBackground.Visibility = Visibility.Visible;
-        }
-        BackgroundStatusText.Text = Path.GetFileName(path);
-    }
-
-    private async void ClearBackground_Click(object sender, RoutedEventArgs e)
-    {
-        VideoBackground.Stop(); VideoBackground.Source = null; VideoBackground.Visibility = Visibility.Collapsed;
-        ImageBackground.Source = null; ImageBackground.Visibility = Visibility.Collapsed;
-        BackgroundStatusText.Text = "Используется стандартный фон";
-        await SaveSettingsAsync(null);
-    }
-
-    private void VideoBackground_MediaEnded(object sender, RoutedEventArgs e) { VideoBackground.Position = TimeSpan.Zero; VideoBackground.Play(); }
     private void GameLoaderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_uiReady) return;
@@ -351,12 +825,14 @@ public partial class MainWindow : Window
             ModLoaderBox.SelectedIndex = GameLoaderBox.SelectedIndex;
         UpdateProfileSummary();
     }
+
     private void ModLoaderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_uiReady) return;
         if (GameLoaderBox is not null && ModLoaderBox.SelectedIndex >= 0 && ModLoaderBox.SelectedIndex < GameLoaderBox.Items.Count)
             GameLoaderBox.SelectedIndex = ModLoaderBox.SelectedIndex;
     }
+
     private void GameProfile_Changed(object sender, SelectionChangedEventArgs e) => UpdateProfileSummary();
     private void UpdateProfileSummary()
     {
@@ -365,22 +841,29 @@ public partial class MainWindow : Window
         var loader = (GameLoaderBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Vanilla";
         ProfileSummaryText.Text = $"{loader} · {version}";
     }
+
     private async void VersionFilter_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsInitialized || _suppressVersionReload) return;
         await LoadVersionsAsync();
         await SaveSettingsAsync(_backgroundPath);
     }
+
     private void Library_Click(object sender, RoutedEventArgs e) => NavigateTo(1);
     private void Mods_Click(object sender, RoutedEventArgs e) => NavigateTo(2);
     private void Accounts_Click(object sender, RoutedEventArgs e) => NavigateTo(3);
     private void Settings_Click(object sender, RoutedEventArgs e) => NavigateTo(4);
     private void GoHome_Click(object sender, RoutedEventArgs e) => NavigateTo(0);
     private void NavigateTo(int index) => MainTabs.SelectedIndex = index;
+
     private void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!ReferenceEquals(e.OriginalSource, MainTabs) || MainTabs.SelectedItem is not TabItem item) return;
-        PageTitle.Text = item.Header?.ToString() switch { "Главная" => "Обзор", _ => item.Header?.ToString() ?? "KS Launcher" };
+        PageTitle.Text = item.Header?.ToString() switch
+        {
+            "Главная" => "Обзор",
+            _ => item.Header?.ToString() ?? "KS Launcher"
+        };
         var buttons = new[] { NavHomeButton, NavLibraryButton, NavModsButton, NavAccountsButton, NavSettingsButton };
         for (var i = 0; i < buttons.Length; i++)
         {
@@ -390,12 +873,15 @@ public partial class MainWindow : Window
             button.BorderBrush = selected ? new SolidColorBrush(Color.FromRgb(28, 41, 35)) : Brushes.Transparent;
             button.SetResourceReference(Control.ForegroundProperty, selected ? "Accent" : "Muted");
         }
+        if (MainTabs.SelectedIndex == 1) LoadLibraryInstances();
     }
+
     private void Window_DragMove(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 2) { ToggleMaximize(); return; }
         if (e.LeftButton == MouseButtonState.Pressed) DragMove();
     }
+
     private void RamSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (RamLabel is not null) RamLabel.Text = $"{(int)e.NewValue} ГБ";
@@ -403,8 +889,11 @@ public partial class MainWindow : Window
         RamWarningText.Text = (int)e.NewValue > JvmTuning.RecommendedHeapMb / 1024
             ? "Высокое значение: Windows может замедлиться"
             : "Рекомендуется оставить память системе";
-        RamWarningText.Foreground = (int)e.NewValue > JvmTuning.RecommendedHeapMb / 1024 ? System.Windows.Media.Brushes.Orange : (System.Windows.Media.Brush)FindResource("Muted");
+        RamWarningText.Foreground = (int)e.NewValue > JvmTuning.RecommendedHeapMb / 1024
+            ? System.Windows.Media.Brushes.Orange
+            : (System.Windows.Media.Brush)FindResource("Muted");
     }
+
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void Maximize_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
     private void ToggleMaximize() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
@@ -594,5 +1083,13 @@ public partial class MainWindow : Window
         Icon = bitmap;
     }
 
-    private sealed record LauncherSettings(string? BackgroundPath, bool IncludeSnapshots, string? AccentColor = null, bool GradientAccent = false, double BackgroundDim = 0.70, string? SecondaryAccentColor = null);
+    private sealed record LauncherSettings(
+        string? BackgroundPath, 
+        bool IncludeSnapshots, 
+        string? AccentColor = null, 
+        bool GradientAccent = false, 
+        double BackgroundDim = 0.70, 
+        string? SecondaryAccentColor = null,
+        string? GameLanguage = "ru"
+    );
 }
