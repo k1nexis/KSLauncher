@@ -2,6 +2,7 @@ import asyncio
 import os
 import time
 import aiohttp
+from aiohttp import web
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -171,9 +172,22 @@ async def send_chunked(target, text: str):
         await target.reply(text[i : i + 1900], mention_author=False)
 
 
+async def start_health_server():
+    port = int(os.getenv("PORT", "7860"))
+    app = web.Application()
+    app.router.add_get("/", lambda _: web.Response(text="KS Support Bot is running"))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+
 @bot.event
 async def on_ready():
     print(f"KS Support Bot запущен как {bot.user}")
+    if not getattr(bot, "_health_started", False):
+        bot._health_started = True
+        asyncio.create_task(start_health_server())
 
 
 @bot.event
