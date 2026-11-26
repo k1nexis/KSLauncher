@@ -442,15 +442,16 @@ const KS_SUPPORT_PROMPT = `Ты — официальный AI-помощник �
 7. Сайты: https://kslauncher.pages.dev/ и зеркало https://k1nexis.github.io/KSLauncher/.`;
 
 function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  const clean = hex.trim();
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
   return bytes;
 }
 
 async function verifyDiscordSignature(publicKeyHex: string, signatureHex: string, timestamp: string, rawBody: string): Promise<boolean> {
   try {
-    const key = await crypto.subtle.importKey('raw', hexToBytes(publicKeyHex), { name: 'Ed25519' }, false, ['verify']);
-    return await crypto.subtle.verify('Ed25519', key, hexToBytes(signatureHex), enc.encode(timestamp + rawBody));
+    const key = await crypto.subtle.importKey('raw', hexToBytes(publicKeyHex.trim()), { name: 'Ed25519' }, false, ['verify']);
+    return await crypto.subtle.verify('Ed25519', key, hexToBytes(signatureHex.trim()), enc.encode(timestamp + rawBody));
   } catch {
     return false;
   }
@@ -506,7 +507,10 @@ async function askKsSupportAi(env: Env, question: string): Promise<string> {
             const answer = await askKsSupportAi(env, question);
             await fetch(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
               method: 'PATCH',
-              headers: { 'content-type': 'application/json' },
+              headers: {
+                'content-type': 'application/json',
+                'user-agent': 'KSLauncherBot (https://kslauncher.pages.dev, 1.0)'
+              },
               body: JSON.stringify({ content: `**Вопрос:** ${question}\n\n${answer}`.slice(0, 1950) })
             });
           })());
