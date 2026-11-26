@@ -5,6 +5,7 @@ cloudflare/node_modules/
 cloudflare/.wrangler/
 .wrangler/
 cloudflare/.dev.vars
+discord-support-bot/.env
 scratch_*
 live_script.js
 live_test.html
