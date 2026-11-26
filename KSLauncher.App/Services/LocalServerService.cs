@@ -177,6 +177,7 @@ public sealed class LocalServerService : IDisposable
         props["pvp"] = cfg.Pvp ? "true" : "false";
         props["white-list"] = cfg.WhiteList ? "true" : "false";
         props["enable-command-block"] = "true";
+        props["sync-chunk-writes"] = "false";
 
         var sb = new StringBuilder();
         sb.AppendLine("# Minecraft server properties (managed by KS Launcher)");

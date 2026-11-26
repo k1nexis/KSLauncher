@@ -67,6 +67,7 @@ public sealed class MinecraftService
 
         Directory.CreateDirectory(root);
         ConfigureLanguage(root, gameLanguage);
+        ConfigureChunkPerformance(root);
 
         var path = new MinecraftPath(root);
         var parameters = MinecraftLauncherParameters.CreateDefault(path);
@@ -300,6 +301,27 @@ public sealed class MinecraftService
             {
                 File.WriteAllText(optionsPath, $"lang:{langCode}\n");
             }
+        }
+        catch { }
+    }
+
+    private static void ConfigureChunkPerformance(string instanceRoot)
+    {
+        var optionsPath = Path.Combine(instanceRoot, "options.txt");
+        try
+        {
+            var lines = File.Exists(optionsPath)
+                ? File.ReadAllLines(optionsPath).ToList()
+                : new List<string>();
+
+            // prioritizeChunkUpdates:0 = Threaded (многопоточная асинхронная прогрузка чанков без просадок FPS)
+            var idx = lines.FindIndex(l => l.StartsWith("prioritizeChunkUpdates:", StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0)
+                lines[idx] = "prioritizeChunkUpdates:0";
+            else
+                lines.Add("prioritizeChunkUpdates:0");
+
+            File.WriteAllLines(optionsPath, lines);
         }
         catch { }
     }
