@@ -102,6 +102,7 @@ public partial class MainWindow : Window
     private const uint WM_SETICON = 0x0080;
     private static readonly IntPtr ICON_SMALL = IntPtr.Zero;
     private static readonly IntPtr ICON_BIG = (IntPtr)1;
+    private System.Drawing.Icon? _windowIcon;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -109,15 +110,22 @@ public partial class MainWindow : Window
         try
         {
             var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-            var exe = Environment.ProcessPath;
-            if (!string.IsNullOrEmpty(exe) && File.Exists(exe))
+            var streamInfo = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/kslauncher.ico"));
+            if (streamInfo != null)
             {
-                using var sysIcon = System.Drawing.Icon.ExtractAssociatedIcon(exe);
-                if (sysIcon != null)
-                {
-                    SendMessage(hwnd, WM_SETICON, ICON_SMALL, sysIcon.Handle);
-                    SendMessage(hwnd, WM_SETICON, ICON_BIG, sysIcon.Handle);
-                }
+                _windowIcon = new System.Drawing.Icon(streamInfo.Stream);
+            }
+            else
+            {
+                var exe = Environment.ProcessPath;
+                if (!string.IsNullOrEmpty(exe) && File.Exists(exe))
+                    _windowIcon = System.Drawing.Icon.ExtractAssociatedIcon(exe);
+            }
+
+            if (_windowIcon != null)
+            {
+                SendMessage(hwnd, WM_SETICON, ICON_SMALL, _windowIcon.Handle);
+                SendMessage(hwnd, WM_SETICON, ICON_BIG, _windowIcon.Handle);
             }
         }
         catch { }
@@ -2354,6 +2362,7 @@ del ""%~f0"" >nul 2>&1
         {
             _friends.Dispose();
             _localServers.Dispose();
+            _windowIcon?.Dispose();
         };
 
         _friends.StartLanSync(GetMyCurrentPresence);
@@ -2451,18 +2460,6 @@ del ""%~f0"" >nul 2>&1
         {
             ConfirmDialog.ShowError(this, "Не удалось добавить друга", ex.Message);
         }
-    }
-
-    private void SeedTestFriends_Click(object sender, RoutedEventArgs e)
-    {
-        _friends.SeedTestFriends();
-        StatusText.Text = "Тестовые друзья добавлены для проверки всех сценариев.";
-    }
-
-    private void SimulateModpackInvite_Click(object sender, RoutedEventArgs e)
-    {
-        var invite = _friends.SimulateModpackInvite();
-        StatusText.Text = $"Получено тестовое приглашение от {invite.FromUsername} в сборку «{invite.Modpack?.Title}»!";
     }
 
     private void RemoveFriend_Click(object sender, RoutedEventArgs e)

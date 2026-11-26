@@ -157,9 +157,8 @@ public sealed class FriendsService : IDisposable
             Save();
         }
 
-        if (!File.Exists(_filePath) || _data.Friends.Count == 0)
+        if (_data.Friends.RemoveAll(f => f.IsTestFriend) > 0)
         {
-            SeedTestFriends();
             Save();
         }
     }
@@ -185,89 +184,6 @@ public sealed class FriendsService : IDisposable
     {
         var num = RandomNumberGenerator.GetInt32(10_000_000, 100_000_000);
         return $"KS-{num}";
-    }
-
-    public void SeedTestFriends()
-    {
-        var testFriends = new List<FriendProfile>
-        {
-            new()
-            {
-                FriendId = "KS-10000001",
-                Username = "ArtemPlay",
-                AccountSystem = "Ely.by",
-                IsTestFriend = true,
-                Presence = new FriendPresence
-                {
-                    IsOnline = true,
-                    IsPlaying = true,
-                    ServerName = "Vanilla Survival",
-                    ServerIp = "127.0.0.1",
-                    ServerPort = 25565,
-                    GameVersion = "1.20.4",
-                    Loader = "vanilla"
-                }
-            },
-            new()
-            {
-                FriendId = "KS-10000002",
-                Username = "VikaCraft",
-                AccountSystem = "Microsoft",
-                IsTestFriend = true,
-                Presence = new FriendPresence
-                {
-                    IsOnline = true,
-                    IsPlaying = true,
-                    ServerName = "Fabric SMP",
-                    ServerIp = "127.0.0.1",
-                    ServerPort = 25565,
-                    GameVersion = "1.20.4",
-                    Loader = "fabric",
-                    Mods = new List<FriendModInfo>
-                    {
-                        new("sodium", "Sodium", "AANobbMI"),
-                        new("lithium", "Lithium", "gvQqBUqZ"),
-                        new("fabric-api", "Fabric API", "P7dR8mSH")
-                    }
-                }
-            },
-            new()
-            {
-                FriendId = "KS-10000003",
-                Username = "MaxModder",
-                AccountSystem = "KS System",
-                IsTestFriend = true,
-                Presence = new FriendPresence
-                {
-                    IsOnline = true,
-                    IsPlaying = true,
-                    ServerName = "Локальный сервер MaxModder",
-                    ServerIp = "127.0.0.1",
-                    ServerPort = 25565,
-                    GameVersion = "1.20.4",
-                    Loader = "fabric",
-                    IsLocalHostedServer = true,
-                    Modpack = new FriendModpackInfo(
-                        ProjectId: "1KVo5zza",
-                        Slug: "fabulously-optimized",
-                        Title: "Fabulously Optimized",
-                        Version: "1.20.4",
-                        Loader: "fabric"
-                    )
-                }
-            }
-        };
-
-        foreach (var tf in testFriends)
-        {
-            if (!_data.Friends.Any(f => f.FriendId.Equals(tf.FriendId, StringComparison.OrdinalIgnoreCase)
-                                     || f.Username.Equals(tf.Username, StringComparison.OrdinalIgnoreCase)))
-            {
-                _data.Friends.Add(tf);
-            }
-        }
-        Save();
-        FriendsChanged?.Invoke();
     }
 
     public FriendProfile AddFriend(string identifier)
@@ -368,35 +284,6 @@ public sealed class FriendsService : IDisposable
         _pendingInvites.Insert(0, invite);
         InviteReceived?.Invoke(invite);
         FriendsChanged?.Invoke();
-    }
-
-    public FriendInvite SimulateModpackInvite(FriendProfile? friend = null)
-    {
-        var source = friend ?? _data.Friends.FirstOrDefault(f => f.Presence.HasModpack) ?? new FriendProfile
-        {
-            FriendId = "KS-TEST-03P",
-            Username = "MaxModder",
-            AccountSystem = "KS System",
-            IsTestFriend = true
-        };
-
-        var invite = new FriendInvite
-        {
-            FromFriendId = source.FriendId,
-            FromUsername = source.Username,
-            FromAccountSystem = source.AccountSystem,
-            ServerName = source.Presence.ServerName ?? $"Сервер {source.Username}",
-            ServerIp = string.IsNullOrWhiteSpace(source.Presence.ServerIp) ? "127.0.0.1" : source.Presence.ServerIp!,
-            ServerPort = source.Presence.ServerPort > 0 ? source.Presence.ServerPort : 25565,
-            GameVersion = source.Presence.Modpack?.Version ?? source.Presence.GameVersion ?? "1.20.4",
-            Loader = source.Presence.Modpack?.Loader ?? source.Presence.Loader ?? "fabric",
-            Modpack = source.Presence.Modpack ?? new FriendModpackInfo("1KVo5zza", "fabulously-optimized", "Fabulously Optimized", "1.20.4", "fabric")
-        };
-
-        _pendingInvites.Insert(0, invite);
-        InviteReceived?.Invoke(invite);
-        FriendsChanged?.Invoke();
-        return invite;
     }
 
     public void StartLanSync(Func<(string Username, string AccountSystem, FriendPresence Presence)> getMyState)
