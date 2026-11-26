@@ -25,8 +25,8 @@ public sealed class LocalServerConfig
 
     public string FolderPath { get; set; } = "";
 
-    public string ModeBadge => OnlineMode ? "Лицензия" : "Пиратский";
-    public string Summary => $"{Core.ToUpperInvariant()} {Version} • {RamMb / 1024} ГБ ОЗУ • Порт {Port} • {ModeBadge}";
+    public string ModeBadge => "Все аккаунты";
+    public string Summary => $"{Core.ToUpperInvariant()} {Version} • {RamMb / 1024} ГБ ОЗУ • Порт {Port}";
 }
 
 public sealed class LocalServerService : IDisposable
@@ -268,8 +268,17 @@ public sealed class LocalServerService : IDisposable
             throw new InvalidOperationException("Другой локальный сервер уже запущен.");
 
         ClearConsole();
+        cfg.OnlineMode = false; // Всегда разрешаем вход с Microsoft, Ely.by, KS System и Offline
         SaveServerConfig(cfg);
         await EnsureServerJarAsync(cfg, onStatus, ct);
+
+        _ = Task.Run(async () =>
+        {
+            var (ok, msg) = await UpnpPortForwarder.TryForwardPortAsync(cfg.Port, $"KSLauncher {cfg.Name}");
+            AppendConsole(ok
+                ? $"[KS Network] {msg} — друзья из других стран могут подключаться по внешнему IP."
+                : $"[KS Network] {msg}");
+        });
 
         var javaBin = !string.IsNullOrWhiteSpace(javaExePath) && File.Exists(javaExePath)
             ? javaExePath

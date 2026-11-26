@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using KSLauncher.App.Services;
 
 namespace KSLauncher.App;
@@ -17,9 +18,32 @@ public partial class JoinFriendDialog : Window
     public JoinFriendMode SelectedMode { get; private set; } = JoinFriendMode.Cancel;
     public GameInstanceInfo? SelectedOwnInstance => OwnInstancesBox.SelectedItem as GameInstanceInfo;
 
-    public JoinFriendDialog(FriendProfile friend, IReadOnlyList<GameInstanceInfo> ownInstances)
+    public JoinFriendDialog(
+        FriendProfile friend,
+        IReadOnlyList<GameInstanceInfo> ownInstances,
+        Brush? accentBrush = null,
+        Brush? surfaceBrush = null,
+        Brush? borderBrush = null)
     {
         InitializeComponent();
+
+        if (surfaceBrush != null)
+        {
+            DialogBorder.Background = surfaceBrush;
+            Background = Brushes.Transparent;
+        }
+        if (borderBrush != null)
+        {
+            DialogBorder.BorderBrush = borderBrush;
+            InfoCard.BorderBrush = borderBrush;
+        }
+        if (accentBrush != null)
+        {
+            WithFriendModsBtn.Background = accentBrush;
+            WithFriendModsBtn.BorderBrush = accentBrush;
+            IconBadge.BorderBrush = accentBrush;
+            IconBadge.BorderThickness = new Thickness(1);
+        }
 
         var p = friend.Presence;
         TitleText.Text = $"{friend.Username} играет с модами";

@@ -42,6 +42,7 @@ public partial class MainWindow : Window
     private readonly FriendsService _friends = new();
     private readonly LocalServerService _localServers = new();
     private LocalServerConfig? _selectedLocalServer;
+    private string? _publicIp;
     private readonly string _settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KSLauncher", "launcher-settings.json");
 
     private MSession? _activeMicrosoftSession;
@@ -136,7 +137,18 @@ public partial class MainWindow : Window
                         sysIcon.Handle,
                         Int32Rect.Empty,
                         System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+                    return;
                 }
+            }
+        }
+        catch { }
+
+        try
+        {
+            var streamInfo = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/kslauncher.ico"));
+            if (streamInfo != null)
+            {
+                Icon = BitmapFrame.Create(streamInfo.Stream);
             }
         }
         catch { }
@@ -2345,7 +2357,18 @@ del ""%~f0"" >nul 2>&1
         };
 
         _friends.StartLanSync(GetMyCurrentPresence);
-        LocalLanIpText.Text = $"Ваш LAN IP: {FriendsService.GetLocalLanIp()}";
+        LocalLanIpText.Text = $"LAN IP: {FriendsService.GetLocalLanIp()}";
+        _ = Task.Run(async () =>
+        {
+            _publicIp = await UpnpPortForwarder.GetPublicIpAsync();
+            Dispatcher.Invoke(() =>
+            {
+                if (PublicIpText != null)
+                    PublicIpText.Text = !string.IsNullOrWhiteSpace(_publicIp)
+                        ? $"Внешний IP: {_publicIp}"
+                        : "Внешний IP: не определён";
+            });
+        });
         RefreshFriendsUi();
         RefreshLocalServersUi();
     }
@@ -2410,11 +2433,19 @@ del ""%~f0"" >nul 2>&1
     {
         try
         {
-            var sys = (AddFriendSystemBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Авто";
-            if (sys.StartsWith("Авто")) sys = "Авто";
-            var friend = _friends.AddFriend(AddFriendInputBox.Text, sys);
+            var input = AddFriendInputBox.Text.Trim();
+            var decodedInvite = FriendsService.TryDecodeInviteCode(input);
+            if (decodedInvite != null)
+            {
+                _friends.AddIncomingInvite(decodedInvite);
+                AddFriendInputBox.Clear();
+                ConfirmDialog.ShowSuccess(this, "Приглашение получено", $"Приглашение от {decodedInvite.FromUsername} добавлено в список выше. Нажмите «Принять и зайти»!");
+                return;
+            }
+
+            var friend = _friends.AddFriend(input);
             AddFriendInputBox.Clear();
-            StatusText.Text = $"Друг {friend.Username} ({friend.AccountSystem}) добавлен!";
+            StatusText.Text = $"Друг {friend.Username} ({friend.FriendId}) добавлен!";
         }
         catch (Exception ex)
         {
@@ -2444,13 +2475,29 @@ del ""%~f0"" >nul 2>&1
     {
         if ((sender as FrameworkElement)?.Tag is not FriendProfile friend) return;
         var my = GetMyCurrentPresence();
-        if (string.IsNullOrWhiteSpace(my.Presence.ServerIp))
+        var hostIp = !string.IsNullOrWhiteSpace(_publicIp) ? _publicIp : my.Presence.ServerIp;
+        if (string.IsNullOrWhiteSpace(hostIp))
         {
             ConfirmDialog.ShowInfo(this, "Нет активного сервера", "Запустите локальный сервер во вкладке «Серверы», чтобы позвать друга на него.");
             return;
         }
+        my.Presence.ServerIp = hostIp;
         _friends.SendInvite(friend, my.Username, my.AccountSystem, my.Presence);
-        StatusText.Text = $"Приглашение на {my.Presence.ServerIp}:{my.Presence.ServerPort} отправлено {friend.Username}!";
+        var inviteCode = FriendsService.EncodeInviteCode(new FriendInvite
+        {
+            FromFriendId = _friends.MyFriendCode,
+            FromUsername = my.Username,
+            FromAccountSystem = my.AccountSystem,
+            ServerName = my.Presence.ServerName ?? $"Сервер {my.Username}",
+            ServerIp = hostIp,
+            ServerPort = my.Presence.ServerPort,
+            GameVersion = my.Presence.GameVersion ?? "1.20.4",
+            Loader = my.Presence.Loader ?? "vanilla",
+            Mods = my.Presence.Mods,
+            Modpack = my.Presence.Modpack
+        });
+        Clipboard.SetText(inviteCode);
+        StatusText.Text = $"Приглашение для {friend.Username} отправлено, а код KSINV скопирован в буфер!";
     }
 
     private async void JoinFriend_Click(object sender, RoutedEventArgs e)
@@ -2476,7 +2523,13 @@ del ""%~f0"" >nul 2>&1
 
         if (p.HasMods)
         {
-            var dlg = new JoinFriendDialog(friend, _minecraft.Instances.GetInstances()) { Owner = this };
+            var dlg = new JoinFriendDialog(
+                friend,
+                _minecraft.Instances.GetInstances(),
+                Resources["Accent"] as Brush,
+                Resources["SurfaceBase"] as Brush,
+                Resources["SurfaceBorder"] as Brush)
+            { Owner = this };
             if (dlg.ShowDialog() != true) return;
 
             switch (dlg.SelectedMode)
@@ -2634,7 +2687,6 @@ del ""%~f0"" >nul 2>&1
 
         StartServerBtn.IsEnabled = !_localServers.IsRunning;
         StopServerBtn.IsEnabled = isThisRunning;
-        EditServerPirateBox.IsChecked = !_selectedLocalServer.OnlineMode;
 
         foreach (ComboBoxItem item in EditServerRamBox.Items)
         {
@@ -2657,7 +2709,6 @@ del ""%~f0"" >nul 2>&1
             var maxPlayers = int.TryParse(ServerMaxPlayersBox.Text.Trim(), out var mp) ? mp : 20;
             var gamemode = (ServerGamemodeBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "survival";
             var difficulty = (ServerDifficultyBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "normal";
-            var onlineMode = ServerPirateBox.IsChecked != true;
 
             var created = _localServers.CreateServer(
                 name: ServerNameBox.Text,
@@ -2665,7 +2716,7 @@ del ""%~f0"" >nul 2>&1
                 core: core,
                 ramMb: ramMb,
                 port: port,
-                onlineMode: onlineMode,
+                onlineMode: false,
                 motd: ServerMotdBox.Text,
                 maxPlayers: maxPlayers,
                 difficulty: difficulty,
@@ -2710,7 +2761,7 @@ del ""%~f0"" >nul 2>&1
     private void SaveSelectedServerSettings_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLocalServer == null) return;
-        _selectedLocalServer.OnlineMode = EditServerPirateBox.IsChecked != true;
+        _selectedLocalServer.OnlineMode = false;
         if (int.TryParse((EditServerRamBox.SelectedItem as ComboBoxItem)?.Tag?.ToString(), out var ram))
             _selectedLocalServer.RamMb = ram;
         _localServers.SaveServerConfig(_selectedLocalServer);
@@ -2721,7 +2772,8 @@ del ""%~f0"" >nul 2>&1
     private void CopyLocalServerIp_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLocalServer == null) return;
-        var ip = $"{FriendsService.GetLocalLanIp()}:{_selectedLocalServer.Port}";
+        var host = !string.IsNullOrWhiteSpace(_publicIp) ? _publicIp : FriendsService.GetLocalLanIp();
+        var ip = $"{host}:{_selectedLocalServer.Port}";
         Clipboard.SetText(ip);
         StatusText.Text = $"Адрес сервера скопирован: {ip}";
     }
@@ -2738,19 +2790,34 @@ del ""%~f0"" >nul 2>&1
     {
         if (_selectedLocalServer == null) return;
         var my = GetMyCurrentPresence();
+        var hostIp = !string.IsNullOrWhiteSpace(_publicIp) ? _publicIp : FriendsService.GetLocalLanIp();
         var presence = new FriendPresence
         {
             IsOnline = true,
             IsPlaying = true,
             ServerName = _selectedLocalServer.Name,
-            ServerIp = FriendsService.GetLocalLanIp(),
+            ServerIp = hostIp,
             ServerPort = _selectedLocalServer.Port,
             GameVersion = _selectedLocalServer.Version,
             Loader = _selectedLocalServer.Core == "fabric" ? "fabric" : "vanilla",
             IsLocalHostedServer = true
         };
         _friends.SendInvite(null, my.Username, my.AccountSystem, presence);
-        StatusText.Text = $"Приглашение на сервер «{_selectedLocalServer.Name}» ({presence.ServerIp}:{presence.ServerPort}) отправлено друзьям!";
+
+        var inviteCode = FriendsService.EncodeInviteCode(new FriendInvite
+        {
+            FromFriendId = _friends.MyFriendCode,
+            FromUsername = my.Username,
+            FromAccountSystem = my.AccountSystem,
+            ServerName = _selectedLocalServer.Name,
+            ServerIp = hostIp,
+            ServerPort = _selectedLocalServer.Port,
+            GameVersion = _selectedLocalServer.Version,
+            Loader = presence.Loader ?? "vanilla"
+        });
+        Clipboard.SetText(inviteCode);
+        ConfirmDialog.ShowSuccess(this, "Приглашение готово",
+            $"Приглашение отправлено в LAN и код приглашения скопирован в буфер обмена!\n\nОтправьте этот код другу (в любую страну) — он сможет вставить его во вкладке «Друзья» и сразу подключиться к {hostIp}:{_selectedLocalServer.Port}.");
     }
 
     private void DeleteLocalServer_Click(object sender, RoutedEventArgs e)

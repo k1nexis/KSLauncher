@@ -151,7 +151,7 @@ public sealed class FriendsService : IDisposable
             catch { }
         }
 
-        if (string.IsNullOrWhiteSpace(_data.MyFriendCode))
+        if (string.IsNullOrWhiteSpace(_data.MyFriendCode) || !IsEightDigitKsCode(_data.MyFriendCode))
         {
             _data.MyFriendCode = GenerateFriendCode();
             Save();
@@ -162,6 +162,13 @@ public sealed class FriendsService : IDisposable
             SeedTestFriends();
             Save();
         }
+    }
+
+    private static bool IsEightDigitKsCode(string code)
+    {
+        if (!code.StartsWith("KS-", StringComparison.OrdinalIgnoreCase)) return false;
+        var digits = code[3..];
+        return digits.Length == 8 && digits.All(char.IsDigit);
     }
 
     private void Save()
@@ -176,9 +183,8 @@ public sealed class FriendsService : IDisposable
 
     private static string GenerateFriendCode()
     {
-        var bytes = RandomNumberGenerator.GetBytes(4);
-        var hex = Convert.ToHexString(bytes);
-        return $"KS-{hex[..4]}-{hex[4..]}";
+        var num = RandomNumberGenerator.GetInt32(10_000_000, 100_000_000);
+        return $"KS-{num}";
     }
 
     public void SeedTestFriends()
@@ -187,7 +193,7 @@ public sealed class FriendsService : IDisposable
         {
             new()
             {
-                FriendId = "KS-TEST-01V",
+                FriendId = "KS-10000001",
                 Username = "ArtemPlay",
                 AccountSystem = "Ely.by",
                 IsTestFriend = true,
@@ -204,7 +210,7 @@ public sealed class FriendsService : IDisposable
             },
             new()
             {
-                FriendId = "KS-TEST-02M",
+                FriendId = "KS-10000002",
                 Username = "VikaCraft",
                 AccountSystem = "Microsoft",
                 IsTestFriend = true,
@@ -227,7 +233,7 @@ public sealed class FriendsService : IDisposable
             },
             new()
             {
-                FriendId = "KS-TEST-03P",
+                FriendId = "KS-10000003",
                 Username = "MaxModder",
                 AccountSystem = "KS System",
                 IsTestFriend = true,
@@ -254,7 +260,8 @@ public sealed class FriendsService : IDisposable
 
         foreach (var tf in testFriends)
         {
-            if (!_data.Friends.Any(f => f.FriendId.Equals(tf.FriendId, StringComparison.OrdinalIgnoreCase)))
+            if (!_data.Friends.Any(f => f.FriendId.Equals(tf.FriendId, StringComparison.OrdinalIgnoreCase)
+                                     || f.Username.Equals(tf.Username, StringComparison.OrdinalIgnoreCase)))
             {
                 _data.Friends.Add(tf);
             }
@@ -263,47 +270,42 @@ public sealed class FriendsService : IDisposable
         FriendsChanged?.Invoke();
     }
 
-    public FriendProfile AddFriend(string identifier, string selectedSystem = "Авто")
+    public FriendProfile AddFriend(string identifier)
     {
         var raw = identifier.Trim();
         if (string.IsNullOrWhiteSpace(raw))
-            throw new ArgumentException("Введите ник или KS Friend ID друга.");
+            throw new ArgumentException("Введите ник или ID друга (например KS-12345678).");
 
         string username = raw;
-        string friendId = raw.StartsWith("KS-", StringComparison.OrdinalIgnoreCase)
-            ? raw.ToUpperInvariant()
-            : $"KS-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw.ToLowerInvariant())))[..4]}-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw.ToLowerInvariant() + selectedSystem)))[..4]}";
+        string friendId;
+        string system = "Любая";
 
-        string system = selectedSystem;
-        if (raw.EndsWith(".ms", StringComparison.OrdinalIgnoreCase))
+        if (raw.StartsWith("KS-", StringComparison.OrdinalIgnoreCase) && raw[3..].All(char.IsDigit) && raw.Length == 11)
         {
-            username = raw[..^3];
-            system = "Microsoft";
+            friendId = raw.ToUpperInvariant();
+            username = $"Игрок {raw[3..]}";
         }
-        else if (raw.EndsWith(".ely", StringComparison.OrdinalIgnoreCase))
+        else if (raw.Length == 8 && raw.All(char.IsDigit))
         {
-            username = raw[..^4];
-            system = "Ely.by";
+            friendId = $"KS-{raw}";
+            username = $"Игрок {raw}";
         }
-        else if (raw.EndsWith(".ks", StringComparison.OrdinalIgnoreCase))
+        else
         {
-            username = raw[..^3];
-            system = "KS System";
-        }
-        else if (raw.EndsWith(".offline", StringComparison.OrdinalIgnoreCase))
-        {
-            username = raw[..^8];
-            system = "Offline";
-        }
-        else if (system == "Авто")
-        {
-            system = "KS System";
+            if (raw.EndsWith(".ms", StringComparison.OrdinalIgnoreCase)) { username = raw[..^3]; system = "Microsoft"; }
+            else if (raw.EndsWith(".ely", StringComparison.OrdinalIgnoreCase)) { username = raw[..^4]; system = "Ely.by"; }
+            else if (raw.EndsWith(".ks", StringComparison.OrdinalIgnoreCase)) { username = raw[..^3]; system = "KS System"; }
+            else if (raw.EndsWith(".offline", StringComparison.OrdinalIgnoreCase)) { username = raw[..^8]; system = "Offline"; }
+
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(username.ToLowerInvariant()));
+            var num = (BitConverter.ToUInt32(hash, 0) % 90_000_000) + 10_000_000;
+            friendId = $"KS-{num}";
         }
 
         if (_data.Friends.Any(f => f.FriendId.Equals(friendId, StringComparison.OrdinalIgnoreCase)
-                                  || (f.Username.Equals(username, StringComparison.OrdinalIgnoreCase) && f.AccountSystem.Equals(system, StringComparison.OrdinalIgnoreCase))))
+                                  || f.Username.Equals(username, StringComparison.OrdinalIgnoreCase)))
         {
-            throw new InvalidOperationException($"Друг {username} ({system}) уже добавлен в список.");
+            throw new InvalidOperationException($"Друг {username} ({friendId}) уже добавлен в список.");
         }
 
         var friend = new FriendProfile
@@ -322,6 +324,32 @@ public sealed class FriendsService : IDisposable
         return friend;
     }
 
+    public static string EncodeInviteCode(FriendInvite invite)
+    {
+        var json = JsonSerializer.Serialize(invite);
+        var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        return $"KSINV:{b64}";
+    }
+
+    public static FriendInvite? TryDecodeInviteCode(string text)
+    {
+        var trimmed = text.Trim();
+        if (!trimmed.StartsWith("KSINV:", StringComparison.OrdinalIgnoreCase)) return null;
+        try
+        {
+            var b64 = trimmed[6..].Replace('-', '+').Replace('_', '/');
+            switch (b64.Length % 4)
+            {
+                case 2: b64 += "=="; break;
+                case 3: b64 += "="; break;
+            }
+            var json = Encoding.UTF8.GetString(Convert.FromBase64String(b64));
+            return JsonSerializer.Deserialize<FriendInvite>(json);
+        }
+        catch { return null; }
+    }
+
     public void RemoveFriend(string friendId)
     {
         _data.Friends.RemoveAll(f => f.FriendId.Equals(friendId, StringComparison.OrdinalIgnoreCase));
@@ -332,6 +360,13 @@ public sealed class FriendsService : IDisposable
     public void DismissInvite(string inviteId)
     {
         _pendingInvites.RemoveAll(i => i.Id == inviteId);
+        FriendsChanged?.Invoke();
+    }
+
+    public void AddIncomingInvite(FriendInvite invite)
+    {
+        _pendingInvites.Insert(0, invite);
+        InviteReceived?.Invoke(invite);
         FriendsChanged?.Invoke();
     }
 

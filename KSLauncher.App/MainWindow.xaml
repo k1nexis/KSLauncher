@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:KSLauncher.App"
         Title="KS Launcher" Height="860" Width="1400" MinHeight="720" MinWidth="1140"
+        Icon="pack://application:,,,/Assets/kslauncher.ico"
         WindowStartupLocation="CenterScreen" Background="#0B0F0E" Foreground="#F4F7F5"
         FontFamily="Segoe UI" FontSize="15" WindowStyle="None" AllowsTransparency="False">
   <Window.Resources>
@@ -986,25 +987,17 @@
                 </StackPanel>
               </Border>
 
-              <!-- Добавить друга -->
+              <!-- Добавить друга или принять код приглашения -->
               <Border Background="{DynamicResource Panel}" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="0,12,0,0">
                 <Grid>
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="170"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                   </Grid.ColumnDefinitions>
-                  <TextBox x:Name="AddFriendInputBox" Grid.Column="0" Margin="0,0,10,0" ToolTip="Ник, nick.ms, nick.ely, nick.ks или код KS-XXXX-XXXX"/>
-                  <ComboBox x:Name="AddFriendSystemBox" Grid.Column="1" SelectedIndex="0" Margin="0,0,10,0">
-                    <ComboBoxItem Content="Авто (по тегу)"/>
-                    <ComboBoxItem Content="KS System"/>
-                    <ComboBoxItem Content="Microsoft"/>
-                    <ComboBoxItem Content="Ely.by"/>
-                    <ComboBoxItem Content="Offline"/>
-                  </ComboBox>
-                  <Button Grid.Column="2" Content="+ Добавить друга" Background="{DynamicResource Accent}" Foreground="#FFFFFF" BorderBrush="{DynamicResource Accent}" Padding="14,10" Margin="0,0,8,0" Click="AddFriend_Click"/>
-                  <Button Grid.Column="3" Content="Тест-друзья" Padding="12,10" Click="SeedTestFriends_Click" ToolTip="Добавить тестовых друзей для проверки всех режимов"/>
+                  <TextBox x:Name="AddFriendInputBox" Grid.Column="0" Margin="0,0,10,0" ToolTip="Введите ник, KS-12345678 или вставьте код приглашения KSINV:..."/>
+                  <Button Grid.Column="1" Content="+ Добавить / Вставить код" Background="{DynamicResource Accent}" Foreground="#FFFFFF" BorderBrush="{DynamicResource Accent}" Padding="14,10" Margin="0,0,8,0" Click="AddFriend_Click"/>
+                  <Button Grid.Column="2" Content="Тест-друзья" Padding="12,10" Click="SeedTestFriends_Click" ToolTip="Добавить тестовых друзей для проверки всех режимов"/>
                 </Grid>
               </Border>
 
@@ -1059,28 +1052,24 @@
                   <DockPanel LastChildFill="False" Margin="0,0,0,12">
                     <StackPanel>
                       <TextBlock Text="Локальный хостинг серверов" FontSize="20" FontWeight="Bold"/>
-                      <TextBlock Text="Создайте свой сервер на ПК (2–4+ ГБ ОЗУ), настройте пиратский режим и пригласите друзей." Foreground="{StaticResource Muted}" FontSize="13"/>
+                      <TextBlock Text="Создайте сервер на ПК (2–4+ ГБ ОЗУ). Подключение работает для любых аккаунтов (Microsoft, Ely.by, KS, Offline) и из других стран (UPnP)." Foreground="{StaticResource Muted}" FontSize="13" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <TextBlock x:Name="LocalLanIpText" Text="LAN IP: определение..." Foreground="{DynamicResource Accent}" FontSize="13" FontWeight="SemiBold" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                    <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
+                      <TextBlock x:Name="PublicIpText" Text="Внешний IP: определение..." Foreground="{DynamicResource Accent}" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                      <TextBlock x:Name="LocalLanIpText" Text="LAN IP: определение..." Foreground="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right"/>
+                    </StackPanel>
                   </DockPanel>
 
-                  <Grid Margin="0,0,0,10">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="2*"/>
-                      <ColumnDefinition Width="130"/>
-                      <ColumnDefinition Width="130"/>
-                      <ColumnDefinition Width="150"/>
-                      <ColumnDefinition Width="100"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                  <WrapPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <StackPanel Width="220" Margin="0,0,10,8">
                       <TextBlock Text="Название сервера" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
                       <TextBox x:Name="ServerNameBox" Text="Сервер с друзьями"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                    <StackPanel Width="140" Margin="0,0,10,8">
                       <TextBlock Text="Версия MC" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
-                      <ComboBox x:Name="ServerVersionBox"/>
+                      <ComboBox x:Name="ServerVersionBox" DisplayMemberPath="Id"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="2" Margin="0,0,10,0">
+                    <StackPanel Width="120" Margin="0,0,10,8">
                       <TextBlock Text="Ядро" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
                       <ComboBox x:Name="ServerCoreBox" SelectedIndex="0">
                         <ComboBoxItem Content="Vanilla" Tag="vanilla"/>
@@ -1088,7 +1077,7 @@
                         <ComboBoxItem Content="Fabric" Tag="fabric"/>
                       </ComboBox>
                     </StackPanel>
-                    <StackPanel Grid.Column="3" Margin="0,0,10,0">
+                    <StackPanel Width="165" Margin="0,0,10,8">
                       <TextBlock Text="Оперативка (ОЗУ)" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
                       <ComboBox x:Name="ServerRamBox" SelectedIndex="0">
                         <ComboBoxItem Content="2 ГБ (2048 МБ)" Tag="2048"/>
@@ -1097,28 +1086,19 @@
                         <ComboBoxItem Content="8 ГБ (8192 МБ)" Tag="8192"/>
                       </ComboBox>
                     </StackPanel>
-                    <StackPanel Grid.Column="4">
+                    <StackPanel Width="90" Margin="0,0,10,8">
                       <TextBlock Text="Порт" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
                       <TextBox x:Name="ServerPortBox" Text="25565"/>
                     </StackPanel>
-                  </Grid>
-
-                  <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="2*"/>
-                      <ColumnDefinition Width="120"/>
-                      <ColumnDefinition Width="130"/>
-                      <ColumnDefinition Width="130"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                    <StackPanel Width="220" Margin="0,0,10,8">
                       <TextBlock Text="Описание (MOTD)" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
                       <TextBox x:Name="ServerMotdBox" Text="Локальный сервер KS Launcher"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                    <StackPanel Width="90" Margin="0,0,10,8">
                       <TextBlock Text="Слоты" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
                       <TextBox x:Name="ServerMaxPlayersBox" Text="20"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="2" Margin="0,0,10,0">
+                    <StackPanel Width="140" Margin="0,0,10,8">
                       <TextBlock Text="Режим игры" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
                       <ComboBox x:Name="ServerGamemodeBox" SelectedIndex="0">
                         <ComboBoxItem Content="Выживание" Tag="survival"/>
@@ -1126,7 +1106,7 @@
                         <ComboBoxItem Content="Приключение" Tag="adventure"/>
                       </ComboBox>
                     </StackPanel>
-                    <StackPanel Grid.Column="3">
+                    <StackPanel Width="140" Margin="0,0,10,8">
                       <TextBlock Text="Сложность" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,4"/>
                       <ComboBox x:Name="ServerDifficultyBox" SelectedIndex="2">
                         <ComboBoxItem Content="Мирная" Tag="peaceful"/>
@@ -1135,14 +1115,14 @@
                         <ComboBoxItem Content="Сложная" Tag="hard"/>
                       </ComboBox>
                     </StackPanel>
-                  </Grid>
+                  </WrapPanel>
 
                   <DockPanel LastChildFill="False">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                      <CheckBox x:Name="ServerPirateBox" Content="Пиратский сервер (online-mode=false)" IsChecked="True" Margin="0,0,16,0"/>
+                    <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                       <CheckBox x:Name="ServerPvpBox" Content="PvP" IsChecked="True" Margin="0,0,16,0"/>
-                      <CheckBox x:Name="ServerWhitelistBox" Content="Белый список (Whitelist)" IsChecked="False"/>
-                    </StackPanel>
+                      <CheckBox x:Name="ServerWhitelistBox" Content="Белый список (Whitelist)" IsChecked="False" Margin="0,0,16,0"/>
+                      <TextBlock Text="✓ Вход открыт для всех аккаунтов (Microsoft, Ely.by, KS, Offline)" FontSize="12" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                    </WrapPanel>
                     <Button Content="+ Создать сервер" Background="{DynamicResource Accent}" Foreground="#FFFFFF" BorderBrush="{DynamicResource Accent}" Padding="16,10" DockPanel.Dock="Right" Click="CreateLocalServer_Click"/>
                   </DockPanel>
                 </StackPanel>
@@ -1151,7 +1131,7 @@
               <!-- Список серверов и консоль -->
               <Grid Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="360"/>
+                  <ColumnDefinition Width="280"/>
                   <ColumnDefinition Width="12"/>
                   <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
@@ -1160,12 +1140,12 @@
                 <Border Grid.Column="0" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" CornerRadius="14" Padding="14">
                   <StackPanel>
                     <TextBlock Text="Мои серверы" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                    <ListBox x:Name="LocalServersList" Background="Transparent" BorderThickness="0" MaxHeight="370" SelectionChanged="LocalServersList_SelectionChanged">
+                    <ListBox x:Name="LocalServersList" Background="Transparent" BorderThickness="0" MaxHeight="380" SelectionChanged="LocalServersList_SelectionChanged">
                       <ListBox.ItemTemplate>
                         <DataTemplate>
                           <Border Padding="11,9" Margin="0,0,0,6">
                             <StackPanel>
-                              <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"/>
+                              <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" TextWrapping="Wrap"/>
                               <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{StaticResource Muted}" Margin="0,3,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                           </Border>
@@ -1178,33 +1158,29 @@
                 <!-- Панель управления и живая консоль -->
                 <Border Grid.Column="2" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" CornerRadius="14" Padding="16">
                   <StackPanel>
-                    <DockPanel LastChildFill="False" Margin="0,0,0,10">
-                      <StackPanel>
-                        <TextBlock x:Name="SelectedServerTitle" Text="Выберите или создайте сервер" FontSize="16" FontWeight="Bold"/>
-                        <TextBlock x:Name="SelectedServerStatus" Text="Статус: остановлен" FontSize="12" Foreground="{StaticResource Muted}"/>
-                      </StackPanel>
-                      <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                        <Button x:Name="StartServerBtn" Content="▶ Запустить" Background="{DynamicResource Accent}" Foreground="#FFFFFF" BorderBrush="{DynamicResource Accent}" Padding="12,8" Margin="0,0,6,0" Click="StartLocalServer_Click"/>
-                        <Button x:Name="StopServerBtn" Content="■ Стоп" Background="#7F1D1D" BorderBrush="#991B1B" Padding="12,8" Margin="0,0,6,0" IsEnabled="False" Click="StopLocalServer_Click"/>
-                        <Button Content="🎮 Зайти" Padding="10,8" Margin="0,0,6,0" Click="JoinOwnServer_Click" ToolTip="Запустить Minecraft и подключиться к своему серверу"/>
-                        <Button Content="✉ Позвать" Padding="10,8" Margin="0,0,6,0" Click="InviteFriendsToServer_Click" ToolTip="Отправить приглашение друзьям в KS Friends"/>
-                        <Button Content="🗑" Padding="10,8" Click="DeleteLocalServer_Click" ToolTip="Удалить сервер"/>
-                      </StackPanel>
-                    </DockPanel>
+                    <TextBlock x:Name="SelectedServerTitle" Text="Выберите или создайте сервер" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="SelectedServerStatus" Text="Статус: остановлен" FontSize="12" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,2,0,10"/>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                      <CheckBox x:Name="EditServerPirateBox" Content="Пиратский режим" Margin="0,0,14,0"/>
-                      <ComboBox x:Name="EditServerRamBox" Width="155" Margin="0,0,10,0">
+                    <WrapPanel Orientation="Horizontal" Margin="0,0,0,10">
+                      <Button x:Name="StartServerBtn" Content="▶ Запустить" Background="{DynamicResource Accent}" Foreground="#FFFFFF" BorderBrush="{DynamicResource Accent}" Padding="12,8" Margin="0,0,6,6" Click="StartLocalServer_Click"/>
+                      <Button x:Name="StopServerBtn" Content="■ Стоп" Background="#7F1D1D" BorderBrush="#991B1B" Padding="12,8" Margin="0,0,6,6" IsEnabled="False" Click="StopLocalServer_Click"/>
+                      <Button Content="🎮 Зайти" Padding="10,8" Margin="0,0,6,6" Click="JoinOwnServer_Click" ToolTip="Запустить Minecraft и подключиться к своему серверу"/>
+                      <Button Content="✉ Позвать друзей" Padding="10,8" Margin="0,0,6,6" Click="InviteFriendsToServer_Click" ToolTip="Отправить приглашение в KS Friends и скопировать код приглашения"/>
+                      <Button Content="📋 Скопировать IP" Padding="10,8" Margin="0,0,6,6" Click="CopyLocalServerIp_Click"/>
+                      <Button Content="🗑 Удалить" Padding="10,8" Margin="0,0,6,6" Click="DeleteLocalServer_Click"/>
+                    </WrapPanel>
+
+                    <WrapPanel Orientation="Horizontal" Margin="0,0,0,10">
+                      <ComboBox x:Name="EditServerRamBox" Width="170" Margin="0,0,8,4">
                         <ComboBoxItem Content="2 ГБ (2048 МБ)" Tag="2048"/>
                         <ComboBoxItem Content="4 ГБ (4096 МБ)" Tag="4096"/>
                         <ComboBoxItem Content="6 ГБ (6144 МБ)" Tag="6144"/>
                         <ComboBoxItem Content="8 ГБ (8192 МБ)" Tag="8192"/>
                       </ComboBox>
-                      <Button Content="💾 Применить настройки" Padding="10,6" FontSize="12" Margin="0,0,8,0" Click="SaveSelectedServerSettings_Click"/>
-                      <Button Content="📋 Скопировать IP" Padding="10,6" FontSize="12" Click="CopyLocalServerIp_Click"/>
-                    </StackPanel>
+                      <Button Content="💾 Применить ОЗУ" Padding="10,7" FontSize="12" Margin="0,0,8,4" Click="SaveSelectedServerSettings_Click"/>
+                    </WrapPanel>
 
-                    <TextBox x:Name="ServerConsoleBox" Height="235" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                    <TextBox x:Name="ServerConsoleBox" Height="220" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                              FontFamily="Consolas" FontSize="12" Background="#090D0B" Foreground="#D1FAE5" Padding="10" Margin="0,0,0,8"/>
 
                     <Grid>
