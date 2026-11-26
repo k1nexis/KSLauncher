@@ -1002,8 +1002,8 @@ public partial class MainWindow : Window
             UpdateStatusText.Text = "Загружаю обновление лаунчера с сервера...";
             string[] updateMirrors =
             [
-                "https://kslauncher.pages.dev/KSLauncher.exe",
                 "https://k1nexis.github.io/KSLauncher/KSLauncher.exe",
+                "https://kslauncher.pages.dev/KSLauncher.exe",
                 "https://kslauncher.github.io/KSLauncher.exe"
             ];
             var tempExe = Path.Combine(Path.GetTempPath(), $"KSLauncher_new_{Guid.NewGuid():N}.exe");
