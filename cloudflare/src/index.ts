@@ -9,6 +9,10 @@ interface Env {
   ELY_CLIENT_ID?: string;
   ELY_CLIENT_SECRET?: string;
   ELY_REDIRECT_URI?: string;
+  DISCORD_PUBLIC_KEY?: string;
+  GROQ_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
 }
 type Claims = { sub: string; sid: string; iss: string; iat: number; exp: number };
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type':'application/json; charset=utf-8', 'cache-control':'no-store' } });
@@ -425,6 +429,90 @@ export default {
         } catch (e: any) {
           return json({ error: e.message }, 500);
         }
+      }
+
+const KS_SUPPORT_PROMPT = `Ты — официальный AI-помощник поддержки KS Launcher (лаунчер Minecraft для Windows). Отвечай кратко, дружелюбно и по делу на русском языке (до 1500 символов).
+База знаний KS Launcher:
+1. Загрузчики: Vanilla, Fabric, Forge, NeoForge, Quilt. Vanilla всегда запускает чистый Minecraft без модов.
+2. Краши и ошибки модов: нажать «Починить сборку» на главной или в Библиотеке; проверить Java в Настройках (1.17-1.20.4 -> Java 17; 1.20.5+ -> Java 21; 1.16.5 и ниже -> Java 8).
+3. Скины: KS System (PNG 64x64/64x32 во вкладке Аккаунты), Microsoft, Ely.by.
+4. KS Friends (вкладка «Друзья»): ID формата KS-XXXXXXXX, коды приглашений KSINV:..., любые аккаунты могут играть вместе.
+5. Локальные серверы (вкладка «Серверы»): Vanilla, Paper, Fabric; ОЗУ 2-8 ГБ, живая консоль, авто-проброс порта UPnP (или вручную порт 25565 TCP / Radmin VPN).
+6. FPS: пауза фоновых эффектов лаунчера в игре, High-приоритет, многопоточная прогрузка чанков. Рекомендуется 4-6 ГБ ОЗУ.
+7. Сайты: https://kslauncher.pages.dev/ и зеркало https://k1nexis.github.io/KSLauncher/.`;
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
+async function verifyDiscordSignature(publicKeyHex: string, signatureHex: string, timestamp: string, rawBody: string): Promise<boolean> {
+  try {
+    const key = await crypto.subtle.importKey('raw', hexToBytes(publicKeyHex), { name: 'Ed25519' }, false, ['verify']);
+    return await crypto.subtle.verify('Ed25519', key, hexToBytes(signatureHex), enc.encode(timestamp + rawBody));
+  } catch {
+    return false;
+  }
+}
+
+async function askKsSupportAi(env: Env, question: string): Promise<string> {
+  if (env.GROQ_API_KEY) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${env.GROQ_API_KEY}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'system', content: KS_SUPPORT_PROMPT }, { role: 'user', content: question }], max_tokens: 600, temperature: 0.4 })
+      });
+      if (r.ok) { const d: any = await r.json(); const txt = d?.choices?.[0]?.message?.content; if (txt) return txt.slice(0, 1900); }
+    } catch {}
+  }
+  if (env.OPENROUTER_API_KEY) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'meta-llama/llama-3.3-70b-instruct:free', messages: [{ role: 'system', content: KS_SUPPORT_PROMPT }, { role: 'user', content: question }] })
+      });
+      if (r.ok) { const d: any = await r.json(); const txt = d?.choices?.[0]?.message?.content; if (txt) return txt.slice(0, 1900); }
+    } catch {}
+  }
+  if (env.GEMINI_API_KEY) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ system_instruction: { parts: [{ text: KS_SUPPORT_PROMPT }] }, contents: [{ parts: [{ text: question }] }] })
+      });
+      if (r.ok) { const d: any = await r.json(); const txt = d?.candidates?.[0]?.content?.parts?.[0]?.text; if (txt) return txt.slice(0, 1900); }
+    } catch {}
+  }
+  return 'Опишите проблему подробнее (версия Minecraft, загрузчик, ошибка) или нажмите «Починить сборку» в лаунчере. Если не поможет — позовите @Модератор.';
+}
+
+      if (url.pathname === '/v1/discord' && request.method === 'POST') {
+        if (!env.DISCORD_PUBLIC_KEY) return json({ error: 'DISCORD_PUBLIC_KEY не настроен' }, 500);
+        const sig = request.headers.get('x-signature-ed25519') || '';
+        const ts = request.headers.get('x-signature-timestamp') || '';
+        const rawBody = await request.text();
+        if (!sig || !ts || !(await verifyDiscordSignature(env.DISCORD_PUBLIC_KEY, sig, ts, rawBody))) {
+          return new Response('Invalid request signature', { status: 401 });
+        }
+        const interaction = JSON.parse(rawBody);
+        if (interaction.type === 1) return json({ type: 1 });
+        if (interaction.type === 2) {
+          const question = String(interaction.data?.options?.[0]?.value || 'Как пользоваться KS Launcher?').slice(0, 1000);
+          ctx.waitUntil((async () => {
+            const answer = await askKsSupportAi(env, question);
+            await fetch(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ content: `**Вопрос:** ${question}\n\n${answer}`.slice(0, 1950) })
+            });
+          })());
+          return json({ type: 5 });
+        }
+        return json({ error: 'Unsupported interaction type' }, 400);
       }
 
       return json({error:'Маршрут не найден'},404);
