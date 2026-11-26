@@ -52,8 +52,15 @@ public sealed class MinecraftService
         Action<int>? onProcessExited = null,
         Action<string, double>? onDownloadProgress = null,
         string? serverIp = null,
-        int serverPort = 25565)
+        int serverPort = 25565,
+        string authlibInjectorApiUrl = "ely.by")
     {
+        // Никогда не используем модовый инстанс при выборе Vanilla
+        if (loader.Equals("vanilla", StringComparison.OrdinalIgnoreCase))
+        {
+            customInstanceRoot = null;
+        }
+
         var root = !string.IsNullOrWhiteSpace(customInstanceRoot) && Directory.Exists(customInstanceRoot)
             ? customInstanceRoot
             : GetInstanceRoot(version, loader);
@@ -90,7 +97,7 @@ public sealed class MinecraftService
         var jvmArguments = new List<MArgument>();
         if (!string.IsNullOrWhiteSpace(authlibInjectorPath))
         {
-            jvmArguments.Add(new MArgument($"-javaagent:{authlibInjectorPath}=ely.by"));
+            jvmArguments.Add(new MArgument($"-javaagent:{authlibInjectorPath}={authlibInjectorApiUrl}"));
         }
 
         // Подключаем оптимизированный набор аргументов JVM:
@@ -135,6 +142,7 @@ public sealed class MinecraftService
         process.StartInfo.UseShellExecute = false;
 
         process.Start();
+        try { process.PriorityClass = ProcessPriorityClass.High; } catch { }
         Logs.AttachToProcess(process, onProcessExited);
 
         return process;

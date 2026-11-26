@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private readonly CloudAccountService _cloud = new();
     private readonly FriendsService _friends = new();
     private readonly LocalServerService _localServers = new();
+    private readonly LocalSkinServer _skinServer = new();
     private LocalServerConfig? _selectedLocalServer;
     private string? _publicIp;
     private readonly string _settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KSLauncher", "launcher-settings.json");
@@ -483,11 +484,16 @@ public partial class MainWindow : Window
             {
                 PlayButton.Visibility = Visibility.Collapsed;
                 LibraryRunningTitleText.Text = $"Сборка сейчас запущена (PID {_runningGameProcess!.Id})";
+                // Освобождаем GPU/CPU от фоновых эффектов лаунчера на время игры для максимального FPS
+                try { if (VideoBackground.Visibility == Visibility.Visible) VideoBackground.Pause(); } catch { }
+                FxHost?.Configure("none", 0, 1.0, Colors.Transparent, Colors.Transparent, false);
             }
             else
             {
                 PlayButton.Visibility = Visibility.Visible;
                 PlayButton.IsEnabled = true;
+                try { if (VideoBackground.Visibility == Visibility.Visible) VideoBackground.Play(); } catch { }
+                UpdateFxHost();
             }
         });
     }
@@ -656,17 +662,34 @@ public partial class MainWindow : Window
         {
             var session = _activeMicrosoftSession;
             string? authlibInjectorPath = null;
+            string authlibApiUrl = "ely.by";
             if (session is null && _activeElySession is not null)
             {
                 session = _activeElySession;
                 authlibInjectorPath = await _authlibInjector.EnsureInstalledAsync();
+                authlibApiUrl = "ely.by";
                 SidebarProfile.Text = $"{session.Username} • Ely.by";
             }
             if (session is null)
             {
                 await _profiles.SaveAsync(username);
                 session = MSession.CreateOfflineSession(username);
-                SidebarProfile.Text = $"{username} • Offline";
+                var activeAcc = _accountManager.GetActiveAccount();
+                var isKs = activeAcc?.Type.Equals("ks", StringComparison.OrdinalIgnoreCase) == true;
+                SidebarProfile.Text = isKs ? $"{username} • KS System" : $"{username} • Offline";
+
+                if (isKs)
+                {
+                    await _cloud.SyncLocalCosmeticsAsync(CloudUrlBox.Text);
+                }
+
+                if (LocalSkinServer.GetLocalCosmeticPath(username, "skin") != null ||
+                    LocalSkinServer.GetLocalCosmeticPath(username, "cape") != null)
+                {
+                    _skinServer.EnsureStarted();
+                    authlibInjectorPath = await _authlibInjector.EnsureInstalledAsync();
+                    authlibApiUrl = _skinServer.BaseUrl;
+                }
             }
             else if (_activeMicrosoftSession is not null)
             {
@@ -744,7 +767,8 @@ public partial class MainWindow : Window
                     });
                 },
                 serverIp: serverIp,
-                serverPort: serverPort
+                serverPort: serverPort,
+                authlibInjectorApiUrl: authlibApiUrl
             );
 
             _runningGameProcess = process;
@@ -1917,6 +1941,7 @@ del ""%~f0"" >nul 2>&1
             var email = CloudEmailBox.Text.Trim();
             var password = CloudPasswordBox.Password;
             var username = register ? await _cloud.RegisterAsync(CloudUrlBox.Text, email, CloudUsernameBox.Text.Trim(), password) : await _cloud.LoginAsync(CloudUrlBox.Text, email, password);
+            await _cloud.SyncLocalCosmeticsAsync(CloudUrlBox.Text);
             CloudStatusText.Text = $"KS System подключена: {username}.ks.";
             CloudLogoutButton.IsEnabled = true;
 
@@ -1965,6 +1990,7 @@ del ""%~f0"" >nul 2>&1
     private void GameLoaderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_uiReady) return;
+        _activeCustomInstancePath = null;
         if (ModLoaderBox is not null && GameLoaderBox.SelectedIndex >= 0 && GameLoaderBox.SelectedIndex < ModLoaderBox.Items.Count)
             ModLoaderBox.SelectedIndex = GameLoaderBox.SelectedIndex;
         UpdateProfileSummary();
@@ -1977,7 +2003,11 @@ del ""%~f0"" >nul 2>&1
             GameLoaderBox.SelectedIndex = ModLoaderBox.SelectedIndex;
     }
 
-    private void GameProfile_Changed(object sender, SelectionChangedEventArgs e) => UpdateProfileSummary();
+    private void GameProfile_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        _activeCustomInstancePath = null;
+        UpdateProfileSummary();
+    }
     private void UpdateProfileSummary()
     {
         if (ProfileSummaryText is null) return;
@@ -2362,6 +2392,7 @@ del ""%~f0"" >nul 2>&1
         {
             _friends.Dispose();
             _localServers.Dispose();
+            _skinServer.Dispose();
             _windowIcon?.Dispose();
         };
 

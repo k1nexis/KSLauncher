@@ -41,12 +41,8 @@ public sealed class CloudAccountService
         if (string.IsNullOrWhiteSpace(AccessToken)) throw new InvalidOperationException("Сначала войдите в KS System.");
         var info = new FileInfo(filePath);
         if (!info.Exists || info.Length is < 8 or > 4 * 1024 * 1024) throw new InvalidOperationException("Выберите PNG размером до 4 МБ.");
-        await using var input = File.OpenRead(filePath);
-        var signature = new byte[PngSignature.Length];
-        var read = await input.ReadAsync(signature, cancellationToken);
-        if (read != PngSignature.Length || !signature.SequenceEqual(PngSignature)) throw new InvalidOperationException("Файл не является PNG.");
-        input.Position = 0;
-        using var content = new StreamContent(input);
+        var pngBytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+        using var content = new ByteArrayContent(pngBytes);
         content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
         using var request = new HttpRequestMessage(HttpMethod.Put, new Uri(NormalizeBaseUrl(baseUrl), $"/v1/cosmetics/{kind}")) { Content = content };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
@@ -56,6 +52,36 @@ public sealed class CloudAccountService
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new InvalidOperationException($"Не удалось загрузить косметику (HTTP {(int)response.StatusCode}): {body}");
         }
+        if (!string.IsNullOrWhiteSpace(Username))
+        {
+            LocalSkinServer.SaveLocalCosmetic(Username, kind, pngBytes);
+        }
+    }
+
+    public async Task SyncLocalCosmeticsAsync(string baseUrl, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(AccessToken) || string.IsNullOrWhiteSpace(Username)) return;
+        try
+        {
+            var root = NormalizeBaseUrl(baseUrl);
+            using var req = new HttpRequestMessage(HttpMethod.Get, new Uri(root, "/v1/account/me"));
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+            using var resp = await Client.SendAsync(req, cancellationToken);
+            if (!resp.IsSuccessStatusCode) return;
+
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(cancellationToken));
+            if (!doc.RootElement.TryGetProperty("cosmetics", out var items)) return;
+
+            foreach (var item in items.EnumerateArray())
+            {
+                var kind = item.GetProperty("kind").GetString();
+                var urlPath = item.GetProperty("url").GetString();
+                if (string.IsNullOrWhiteSpace(kind) || string.IsNullOrWhiteSpace(urlPath)) continue;
+                var bytes = await Client.GetByteArrayAsync(new Uri(root, urlPath), cancellationToken);
+                LocalSkinServer.SaveLocalCosmetic(Username, kind, bytes);
+            }
+        }
+        catch { }
     }
 
     public async Task LogoutAsync(string baseUrl, CancellationToken cancellationToken = default)

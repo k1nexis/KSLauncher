@@ -21,29 +21,33 @@ public static class JvmTuning
     public static List<string> GetOptimizedJvmArguments(bool stringDeduplication)
     {
         int cores = Environment.ProcessorCount;
-        int concThreads = Math.Max(1, cores / 4);
+        int gcThreads = Math.Clamp(cores / 2, 2, 8);
+        int concThreads = Math.Max(1, gcThreads / 2);
 
         var args = new List<string>
         {
-            // 1. Использование всех ядер процессора для игры и фоновой генерации
-            $"-XX:ActiveProcessorCount={cores}",
-            $"-XX:ParallelGCThreads={cores}",
+            // 1. Сбалансированные потоки GC без перегрузки рендер-потоков Minecraft
+            $"-XX:ParallelGCThreads={gcThreads}",
             $"-XX:ConcGCThreads={concThreads}",
 
-            // 2. Высокопроизводительный G1GC с минимальными задержками (без микрофризов)
+            // 2. Высокопроизводительный G1GC с минимальными задержками (Aikar + modern Minecraft tuning)
             "-XX:+UnlockExperimentalVMOptions",
             "-XX:+UseG1GC",
-            "-XX:MaxGCPauseMillis=35",
-            "-XX:G1NewSizePercent=30",
-            "-XX:G1MaxNewSizePercent=50",
-            "-XX:G1ReservePercent=15",
-            "-XX:G1HeapRegionSize=32M",
-            "-XX:InitiatingHeapOccupancyPercent=45",
-            "-XX:G1MixedGCCountTarget=4",
-
-            // 3. Быстрое создание мира и прогрузка чанков (AlwaysPreTouch исключает фризы ОС при аллокации памяти)
+            "-XX:+ParallelRefProcEnabled",
+            "-XX:MaxGCPauseMillis=25",
+            "-XX:+DisableExplicitGC",
             "-XX:+AlwaysPreTouch",
+            "-XX:G1NewSizePercent=20",
+            "-XX:G1MaxNewSizePercent=40",
+            "-XX:G1HeapRegionSize=16M",
+            "-XX:G1ReservePercent=15",
+            "-XX:InitiatingHeapOccupancyPercent=20",
+            "-XX:G1MixedGCCountTarget=4",
+            "-XX:SurvivorRatio=32",
+            "-XX:MaxTenuringThreshold=1",
+            "-XX:+PerfDisableSharedMem",
             "-XX:+OptimizeStringConcat",
+            "-Djava.net.preferIPv4Stack=true",
             "-Dsun.rmi.dgc.server.gcInterval=2147483646"
         };
 
