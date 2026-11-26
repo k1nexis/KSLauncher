@@ -278,8 +278,9 @@ public partial class MainWindow : Window
         {
             var machineGuid = Environment.MachineName + "_" + Environment.UserName;
             var sessionId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(machineGuid)));
-            var version = customVersion ?? (VersionBox.SelectedItem as MinecraftVersion)?.Id ?? "1.20.1";
-            var loader = customLoader ?? (GameLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "vanilla";
+            var isGameStart = eventType == "game_start";
+            var version = isGameStart ? (customVersion ?? (VersionBox.SelectedItem as MinecraftVersion)?.Id) : null;
+            var loader = isGameStart ? (customLoader ?? (GameLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()) : null;
             var os = Environment.OSVersion.VersionString;
 
             using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };

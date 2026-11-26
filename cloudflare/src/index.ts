@@ -259,8 +259,8 @@ export default {
           const body = await request.json<any>();
           const eventType = String(body.event_type || 'launch').slice(0, 32);
           const sessionId = String(body.session_id || randomId()).slice(0, 64);
-          const version = body.version ? String(body.version).slice(0, 32) : '1.20.4';
-          const loader = body.loader ? String(body.loader).slice(0, 32) : 'vanilla';
+          const version = body.version ? String(body.version).slice(0, 32) : null;
+          const loader = body.loader ? String(body.loader).slice(0, 32) : null;
           const os = body.os ? String(body.os).slice(0, 64) : 'Windows';
           const now = Date.now();
 
@@ -320,7 +320,7 @@ export default {
           const versionRows = await env.DB.prepare(`
             SELECT version, COUNT(*) as count 
             FROM telemetry_events 
-            WHERE version IS NOT NULL 
+            WHERE event_type = 'game_start' AND version IS NOT NULL 
             GROUP BY version 
             ORDER BY count DESC 
             LIMIT 5
@@ -329,7 +329,7 @@ export default {
           const loaderRows = await env.DB.prepare(`
             SELECT loader, COUNT(*) as count 
             FROM telemetry_events 
-            WHERE loader IS NOT NULL 
+            WHERE event_type = 'game_start' AND loader IS NOT NULL 
             GROUP BY loader 
             ORDER BY count DESC 
             LIMIT 5
