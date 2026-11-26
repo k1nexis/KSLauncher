@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\kslauncher.ico</ApplicationIcon>
+    <AssemblyName>KSLauncherInstaller</AssemblyName>
+    <RootNamespace>KSLauncher.Installer</RootNamespace>
+    <Authors>KS Launcher Team</Authors>
+    <Company>KS Launcher Team</Company>
+    <Product>KS Launcher Installer</Product>
+    <Description>Официальный установщик KS Launcher</Description>
+    <Copyright>Copyright © 2026 KS Launcher Team</Copyright>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>0.2.0</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <Resource Include="Assets\kslauncher.ico" />
+    <EmbeddedResource Include="..\dist\KSLauncher.App.exe">
+      <LogicalName>KSLauncher.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\dist\WebView2Loader.dll">
+      <LogicalName>WebView2Loader.dll</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

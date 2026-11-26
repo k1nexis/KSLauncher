@@ -100,7 +100,9 @@ public sealed class CurseForgeService
         string instancesRoot, 
         CancellationToken cancellationToken = default)
     {
-        var instance = Path.Combine(instancesRoot, SafeSegment($"{gameVersion}-{loader.ToLowerInvariant()}"));
+        var instance = (File.Exists(Path.Combine(instancesRoot, "instance.json")) || Directory.Exists(Path.Combine(instancesRoot, "mods")))
+            ? instancesRoot
+            : Path.Combine(instancesRoot, SafeSegment($"{gameVersion}-{loader.ToLowerInvariant()}"));
         var subFolder = projectType switch
         {
             "mod" => "mods",

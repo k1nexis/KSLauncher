@@ -84,7 +84,7 @@ async function verifyToken(token: string, env: Env): Promise<Claims|null> {
 }
 async function hashPassword(password: string, salt: Uint8Array) {
   const key = await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);
-  return new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:310_000,hash:'SHA-256'},key,256));
+  return new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:100_000,hash:'SHA-256'},key,256));
 }
 async function authenticate(request: Request, env: Env) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i,''); if (!token) return null;
@@ -138,6 +138,8 @@ export default {
         const authorize=new URL('https://account.ely.by/oauth2/v1');
         authorize.searchParams.set('client_id',env.ELY_CLIENT_ID); authorize.searchParams.set('redirect_uri',env.ELY_REDIRECT_URI);
         authorize.searchParams.set('response_type','code'); authorize.searchParams.set('scope','account_info minecraft_server_session'); authorize.searchParams.set('state',state);
+        const prompt = url.searchParams.get('prompt') || 'select_account';
+        authorize.searchParams.set('prompt', prompt);
         return json({authorizationUrl:authorize.toString(),state});
       }
       if (url.pathname==='/v1/ely/callback' && request.method==='GET') {
@@ -210,7 +212,6 @@ export default {
       const upload=url.pathname.match(/^\/v1\/cosmetics\/(skin|cape)$/);
       if(upload && request.method==='PUT') {
         const claims=await authenticate(request,env); if(!claims) return json({error:'Требуется авторизация'},401);
-        if(!env.ASSETS) return json({error:'Загрузка косметики включается после настройки платного R2. Сайт и аккаунт KS System доступны без него.'},503);
         const type=request.headers.get('content-type')||'', size=Number(request.headers.get('content-length')||0);
         if(type!=='image/png' || size<1 || size>4*1024*1024) return json({error:'Ожидается PNG до 4 МБ'},400);
         const bytes=new Uint8Array(await request.arrayBuffer());
@@ -220,8 +221,17 @@ export default {
         const geoError = validatePngGeometry(bytes, kind);
         if (geoError) return json({error: geoError}, 400);
 
-        const key=`users/${claims.sub}/${kind}.png`;
-        await env.ASSETS.put(key,bytes,{httpMetadata:{contentType:'image/png',cacheControl:'public, max-age=300'}});
+        let key = `users/${claims.sub}/${kind}.png`;
+        if (env.ASSETS) {
+          await env.ASSETS.put(key,bytes,{httpMetadata:{contentType:'image/png',cacheControl:'public, max-age=300'}});
+        } else {
+          let binary = '';
+          const len = bytes.byteLength;
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          key = `data:image/png;base64,${btoa(binary)}`;
+        }
         await env.DB.prepare('INSERT INTO cosmetics(id,user_id,kind,object_key,content_type,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,kind) DO UPDATE SET object_key=excluded.object_key,created_at=excluded.created_at').bind(randomId(),claims.sub,kind,key,'image/png',Date.now()).run();
         return json({kind,url:`/v1/cosmetics/${kind}/${claims.sub}`},201);
       }
@@ -230,14 +240,201 @@ export default {
         const kind=asset[1], owner=asset[2];
         const row=await env.DB.prepare('SELECT object_key FROM cosmetics WHERE user_id=? AND kind=?').bind(owner,kind).first<{object_key:string}>();
         if(!row) return json({error:'Не найдено'},404);
+        if (row.object_key.startsWith('data:image/png;base64,')) {
+          const b64 = row.object_key.slice('data:image/png;base64,'.length);
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          return new Response(bytes, {headers:{'content-type':'image/png','cache-control':'public, max-age=300','x-content-type-options':'nosniff'}});
+        }
         if(!env.ASSETS) return json({error:'Косметика временно недоступна без R2'},503);
         const object=await env.ASSETS.get(row.object_key); if(!object) return json({error:'Не найдено'},404);
         return new Response(object.body,{headers:{'content-type':'image/png','cache-control':'public, max-age=300','x-content-type-options':'nosniff'}});
       }
+      // --- РЕАЛЬНАЯ АНАЛИТИКА (TELEMETRY) ---
+      if (url.pathname === '/v1/telemetry/event' && request.method === 'POST') {
+        try {
+          const body = await request.json<any>();
+          const eventType = String(body.event_type || 'launch').slice(0, 32);
+          const sessionId = String(body.session_id || randomId()).slice(0, 64);
+          const version = body.version ? String(body.version).slice(0, 32) : '1.20.4';
+          const loader = body.loader ? String(body.loader).slice(0, 32) : 'vanilla';
+          const os = body.os ? String(body.os).slice(0, 64) : 'Windows';
+          const now = Date.now();
+
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS telemetry_events (
+              id TEXT PRIMARY KEY,
+              event_type TEXT NOT NULL,
+              session_id TEXT NOT NULL,
+              version TEXT,
+              loader TEXT,
+              os TEXT,
+              created_at INTEGER NOT NULL
+            )
+          `).run();
+
+          await env.DB.prepare(`
+            INSERT INTO telemetry_events (id, event_type, session_id, version, loader, os, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).bind(randomId(), eventType, sessionId, version, loader, os, now).run();
+
+          return json({ ok: true, timestamp: now });
+        } catch (e: any) {
+          return json({ error: e.message }, 500);
+        }
+      }
+
+      if (url.pathname === '/v1/telemetry/stats' && request.method === 'GET') {
+        try {
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS telemetry_events (
+              id TEXT PRIMARY KEY,
+              event_type TEXT NOT NULL,
+              session_id TEXT NOT NULL,
+              version TEXT,
+              loader TEXT,
+              os TEXT,
+              created_at INTEGER NOT NULL
+            )
+          `).run();
+
+          const now = Date.now();
+          const dayAgo = now - 24 * 3600 * 1000;
+          const weekAgo = now - 7 * 24 * 3600 * 1000;
+
+          const totalRow = await env.DB.prepare('SELECT COUNT(*) as count FROM telemetry_events').first<{ count: number }>();
+          const totalEvents = totalRow?.count || 0;
+
+          const uniqueRow = await env.DB.prepare('SELECT COUNT(DISTINCT session_id) as count FROM telemetry_events').first<{ count: number }>();
+          const uniqueUsers = uniqueRow?.count || 0;
+
+          const activeTodayRow = await env.DB.prepare('SELECT COUNT(DISTINCT session_id) as count FROM telemetry_events WHERE created_at >= ?').bind(dayAgo).first<{ count: number }>();
+          const activeToday = activeTodayRow?.count || 0;
+
+          const activeWeekRow = await env.DB.prepare('SELECT COUNT(DISTINCT session_id) as count FROM telemetry_events WHERE created_at >= ?').bind(weekAgo).first<{ count: number }>();
+          const activeWeek = activeWeekRow?.count || 0;
+
+          const versionRows = await env.DB.prepare(`
+            SELECT version, COUNT(*) as count 
+            FROM telemetry_events 
+            WHERE version IS NOT NULL 
+            GROUP BY version 
+            ORDER BY count DESC 
+            LIMIT 5
+          `).all<{ version: string; count: number }>();
+
+          const loaderRows = await env.DB.prepare(`
+            SELECT loader, COUNT(*) as count 
+            FROM telemetry_events 
+            WHERE loader IS NOT NULL 
+            GROUP BY loader 
+            ORDER BY count DESC 
+            LIMIT 5
+          `).all<{ loader: string; count: number }>();
+
+          const recentRows = await env.DB.prepare(`
+            SELECT event_type, version, loader, os, created_at 
+            FROM telemetry_events 
+            ORDER BY created_at DESC 
+            LIMIT 15
+          `).all<{ event_type: string; version: string; loader: string; os: string; created_at: number }>();
+
+          return json({
+            totalEvents,
+            uniqueUsers,
+            activeToday,
+            activeWeek,
+            versions: versionRows.results || [],
+            loaders: loaderRows.results || [],
+            recentEvents: recentRows.results || []
+          });
+        } catch (e: any) {
+          return json({ error: e.message }, 500);
+        }
+      }
+
+      if (url.pathname === '/v1/telemetry/reset' && request.method === 'POST') {
+        try {
+          await env.DB.prepare('DELETE FROM telemetry_events').run();
+          return json({ success: true, message: 'История аналитики очищена' });
+        } catch (e: any) {
+          return json({ error: e.message }, 500);
+        }
+      }
+
+      // --- КОНТЕНТ ЛАУНЧЕРА И МОНИТОРИНГ СЕРВЕРОВ ---
+      if (url.pathname === '/v1/content/home' && request.method === 'GET') {
+        try {
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS app_content (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at INTEGER NOT NULL
+            )
+          `).run();
+
+          const row = await env.DB.prepare('SELECT value FROM app_content WHERE key = ?').bind('home_data').first<{ value: string }>();
+          if (row && row.value) {
+            return json(JSON.parse(row.value));
+          }
+          return json({
+            featuredServer: {
+              name: "KS Network · Выживание",
+              ip: "play.kslauncher.ru",
+              desc: "Официальный сервер KS Network. Версия 1.20.4+"
+            },
+            news: [
+              {
+                id: "news-1",
+                title: "Глобальный вайп и старт нового сезона!",
+                badge: "🔥 НОВОСТЬ ДНЯ",
+                desc: "Новая генерация мира, ускоренная прогрузка чанков, автозагрузка модов и обновлённые клановые войны.",
+                tags: ["🚀 Все ядра CPU активны", "⚡ Без лагов при создании мира"],
+                date: "24 Ноября 2026",
+                isFeatured: true
+              }
+            ]
+          });
+        } catch (e: any) {
+          return json({ error: e.message }, 500);
+        }
+      }
+
+      if (url.pathname === '/v1/content/home' && request.method === 'POST') {
+        try {
+          const body = await request.json<any>();
+          const now = Date.now();
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS app_content (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at INTEGER NOT NULL
+            )
+          `).run();
+
+          await env.DB.prepare(`
+            INSERT INTO app_content (key, value, updated_at)
+            VALUES ('home_data', ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+          `).bind(JSON.stringify(body), now).run();
+
+          return json({ success: true, updated_at: now });
+        } catch (e: any) {
+          return json({ error: e.message }, 500);
+        }
+      }
+
       return json({error:'Маршрут не найден'},404);
     };
-    const response=await route(); const merged=new Headers(response.headers); for(const [k,v] of Object.entries(headers)) merged.set(k,v);
-    return new Response(response.body,{status:response.status,headers:merged});
+    try {
+      const response=await route(); const merged=new Headers(response.headers); for(const [k,v] of Object.entries(headers)) merged.set(k,v);
+      return new Response(response.body,{status:response.status,headers:merged});
+    } catch (err: any) {
+      return json({error: err?.message || 'Внутренняя ошибка сервера'}, 500);
+    }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(cleanupExpired(env));

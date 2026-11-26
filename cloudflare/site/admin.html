@@ -1,0 +1,2154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KS Launcher — Панель управления проектом</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@700;800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-dark: #07070F;
+      --bg-card: #0E1122;
+      --bg-card-hover: #13172E;
+      --bg-card-sub: #12162A;
+      --border: rgba(147, 51, 234, 0.22);
+      --border-sub: #222942;
+      --accent: #9333EA;
+      --accent-glow: rgba(147, 51, 234, 0.4);
+      --cyan: #06B6D4;
+      --cyan-glow: rgba(6, 182, 212, 0.35);
+      --emerald: #10B981;
+      --rose: #F43F5E;
+      --amber: #F59E0B;
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+      --radius: 14px;
+      --gradient-brand: linear-gradient(135deg, #9333EA 0%, #06B6D4 100%);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-dark);
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(147, 51, 234, 0.18) 0%, transparent 60%),
+        radial-gradient(circle at 10% 40%, rgba(6, 182, 212, 0.1) 0%, transparent 50%),
+        linear-gradient(180deg, #07070F 0%, #0B0E1B 100%);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #authOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 7, 15, 0.94);
+      backdrop-filter: blur(14px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .auth-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px var(--accent-glow);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 420px;
+      padding: 36px 32px;
+      text-align: center;
+      animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .auth-logo {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      background: var(--gradient-brand);
+      margin: 0 auto 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Cabinet Grotesk', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #FFF;
+      box-shadow: 0 8px 24px var(--accent-glow);
+    }
+
+    header {
+      background: rgba(14, 17, 34, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-sub);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .nav-badge {
+      font-family: 'Cabinet Grotesk', sans-serif;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--gradient-brand);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 18px;
+    }
+    .nav-title {
+      font-family: 'Cabinet Grotesk', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.3px;
+    }
+    .nav-role {
+      font-size: 11px;
+      background: rgba(147, 51, 234, 0.2);
+      border: 1px solid var(--accent);
+      color: #D8B4FE;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-left: 6px;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .live-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34D399;
+      padding: 6px 12px;
+      border-radius: 20px;
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+
+    .tabs-bar {
+      display: flex;
+      gap: 6px;
+      padding: 16px 28px 0;
+      border-bottom: 1px solid var(--border-sub);
+      background: rgba(11, 14, 27, 0.6);
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 18px;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: #FFF;
+      border-bottom-color: var(--accent);
+      background: rgba(147, 51, 234, 0.08);
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+    }
+
+    main {
+      flex: 1;
+      padding: 28px;
+      max-width: 1320px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .tab-pane { display: none; animation: fadeIn 0.2s ease-in; }
+    .tab-pane.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-sub);
+      border-radius: var(--radius);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .kpi-card:hover { transform: translateY(-2px); border-color: var(--border); }
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .kpi-val {
+      font-family: 'Cabinet Grotesk', sans-serif;
+      font-size: 32px;
+      font-weight: 900;
+      color: #FFF;
+    }
+    .kpi-trend {
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .trend-up { color: #34D399; }
+    .trend-muted { color: var(--cyan); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .panel-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-sub);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .panel-title {
+      font-family: 'Cabinet Grotesk', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 6px;
+    }
+    input[type="text"], input[type="password"], textarea, select {
+      width: 100%;
+      background: #080A14;
+      border: 1px solid var(--border-sub);
+      border-radius: 8px;
+      color: #FFF;
+      font-family: inherit;
+      font-size: 14px;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    textarea { resize: vertical; min-height: 80px; }
+
+    .btn {
+      background: var(--gradient-brand);
+      color: #FFF;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 11px 20px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 0.15s, opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn:active { transform: translateY(1px); }
+    .btn-secondary { background: #182035; border: 1px solid var(--border-sub); color: var(--text); }
+    .btn-secondary:hover { background: #202A45; border-color: var(--border); }
+    .btn-success { background: #059669; color: #FFF; }
+    .btn-danger { background: rgba(244, 63, 94, 0.16); border: 1px solid rgba(244, 63, 94, 0.4); color: #FDA4AF; }
+    .btn-danger:hover { background: rgba(244, 63, 94, 0.28); }
+    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
+
+    .item-card {
+      background: var(--bg-card-sub);
+      border: 1px solid var(--border-sub);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      transition: border-color 0.2s;
+    }
+    .item-card:hover { border-color: var(--border); }
+    .item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .badge-tag {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .badge-hero { background: var(--gradient-brand); color: #FFF; }
+    .badge-update { background: rgba(6, 182, 212, 0.16); border: 1px solid var(--cyan); color: #67E8F9; }
+
+    /* Таблица живых событий */
+    .table-responsive { overflow-x: auto; }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    table.data-table th {
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-sub);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    table.data-table td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text);
+    }
+    table.data-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+    .stat-row { margin-bottom: 14px; }
+    .stat-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .stat-bar-bg {
+      background: #111526;
+      border-radius: 6px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .stat-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      background: var(--gradient-brand);
+      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Мониторинг карточка */
+    .server-ping-card {
+      background: #090C19;
+      border: 1px solid var(--border-sub);
+      border-radius: 14px;
+      padding: 18px;
+      margin-top: 14px;
+    }
+    .motd-box {
+      background: #000;
+      border: 1px solid #1E293B;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #E2E8F0;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #12162A;
+      border: 1px solid var(--accent);
+      color: #FFF;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px var(--accent-glow);
+      padding: 14px 22px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.25s;
+      pointer-events: none;
+      z-index: 10000;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    /* REAL-TIME SERVER MONITORING SUITE */
+    .rt-control-strip {
+      background: rgba(18, 25, 23, 0.9);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+    .rt-status-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .rt-countdown-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: rgba(0, 0, 0, 0.3);
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .rt-countdown-val {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--cyan);
+      font-weight: 700;
+      min-width: 38px;
+    }
+    .rt-countdown-bar {
+      width: 48px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .rt-countdown-fill {
+      height: 100%;
+      background: var(--cyan);
+      width: 100%;
+      transition: width 0.1s linear;
+    }
+    .rt-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .rt-interval-selector {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border-sub);
+    }
+    .rt-chip {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .rt-chip:hover { color: #FFF; background: rgba(255, 255, 255, 0.05); }
+    .rt-chip.active {
+      color: #FFF;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(147, 51, 234, 0.4);
+    }
+    .rt-server-switcher-box {
+      margin-bottom: 20px;
+    }
+    .rt-server-pills {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .rt-server-pill {
+      background: var(--bg-card);
+      border: 1px solid var(--border-sub);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .rt-server-pill:hover {
+      border-color: var(--border);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .rt-server-pill.active {
+      border-color: var(--cyan);
+      background: rgba(6, 182, 212, 0.1);
+      color: #FFF;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+    }
+    .rt-server-pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #94A3B8;
+    }
+    .rt-server-pill.online .dot {
+      background: #10B981;
+      box-shadow: 0 0 6px #10B981;
+    }
+    .rt-delta-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 12px;
+    }
+    .delta-up { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .delta-down { background: rgba(244, 63, 94, 0.15); color: #FB7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+    .delta-neutral { background: rgba(148, 163, 184, 0.1); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.2); }
+    .pulse-flash {
+      animation: pulseGlow 0.6s ease-out;
+    }
+    @keyframes pulseGlow {
+      0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.6); transform: scale(1.01); }
+      70% { box-shadow: 0 0 0 10px rgba(6, 182, 212, 0); }
+      100% { transform: scale(1); }
+    }
+    .player-chip {
+      background: rgba(18, 25, 23, 0.8);
+      border: 1px solid var(--border-sub);
+      border-radius: 8px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #E2ECE6;
+      transition: all 0.15s;
+    }
+    .player-chip:hover {
+      border-color: var(--cyan);
+      transform: translateY(-1px);
+    }
+    .player-chip img {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      image-rendering: pixelated;
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Окно авторизации -->
+  <div id="authOverlay">
+    <div class="auth-card">
+      <div class="auth-logo">KS</div>
+      <h2 style="font-family:'Cabinet Grotesk',sans-serif;font-weight:900;font-size:24px;margin-bottom:6px;">Админ-панель KS Launcher</h2>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:24px;">Введите мастер-ключ администратора проекта для входа в панель</p>
+      
+      <div class="form-group" style="text-align:left;">
+        <label class="form-label">Ключ доступа / Пароль</label>
+        <div style="position:relative;">
+          <input type="password" id="adminKeyInput" placeholder="Введите пароль администратора…" onkeydown="if(event.key==='Enter')login()" style="padding-right:40px;">
+          <button type="button" onclick="togglePassVisibility()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;" title="Показать/скрыть пароль">👁</button>
+        </div>
+      </div>
+      <button class="btn" style="width:100%;margin-top:8px;" onclick="login()">🔐 Войти в управление</button>
+      <div id="authError" style="color:var(--rose);font-size:12px;font-weight:600;margin-top:14px;display:none;"></div>
+      
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:18px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="quickFillPass()">⚡ Ввести ksadmin2026</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="resetAdminStorage()">🔄 Сбросить кэш</button>
+      </div>
+
+      <div style="font-size:11px;color:var(--text-dim);margin-top:16px;">Мастер-ключ по умолчанию: <code style="color:var(--cyan);font-weight:700;">ksadmin2026</code></div>
+    </div>
+  </div>
+
+  <!-- Навбар -->
+  <header>
+    <a href="#" class="nav-brand">
+      <div class="nav-badge">KS</div>
+      <div>
+        <div class="nav-title">KS Launcher <span class="nav-role">Админ-панель</span></div>
+        <div style="font-size:11px;color:var(--text-muted);">Реальная аналитика из D1 и Live-мониторинг Minecraft</div>
+      </div>
+    </a>
+
+    <div class="nav-actions">
+      <div class="live-pill">
+        <span class="live-dot"></span>
+        <span id="liveStatusText">БД D1 подключена</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="refreshTelemetry(true)" title="Обновить аналитику прямо сейчас">🔄 Обновить</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetTelemetryData()" title="Очистить аналитику в Cloudflare D1">🗑 Очистить БД</button>
+      <a href="./" target="_blank" class="btn btn-secondary btn-sm" title="Открыть главный сайт">🌐 На сайт</a>
+      <button class="btn btn-secondary btn-sm" onclick="logout()" title="Выйти из админки">🚪 Выйти</button>
+    </div>
+  </header>
+
+  <!-- Вкладки навигации -->
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="switchTab('analytics')">📊 Реальная аналитика</button>
+    <button class="tab-btn" onclick="switchTab('servers')">🌐 Live-мониторинг серверов</button>
+    <button class="tab-btn" onclick="switchTab('news')">📰 Новости и объявления</button>
+    <button class="tab-btn" onclick="switchTab('settings')">⚙️ Настройки и бэкап</button>
+  </div>
+
+  <main>
+
+    <!-- ВКЛАДКА 1: РЕАЛЬНАЯ АНАЛИТИКА ИЗ ОБЛАЧНОЙ БД -->
+    <div id="tab-analytics" class="tab-pane active">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Реальных установок / Устройств</div>
+          <div class="kpi-val" id="kpiUniqueUsers">...</div>
+          <div class="kpi-trend trend-up">✔ Уникальные ПК по базе D1</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Активно за сегодня (24ч)</div>
+          <div class="kpi-val" id="kpiActiveToday" style="color:var(--cyan);">...</div>
+          <div class="kpi-trend trend-up">▲ Реальные запуски за сутки</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Всего запусков и игровых сессий</div>
+          <div class="kpi-val" id="kpiTotalEvents">...</div>
+          <div class="kpi-trend trend-muted">● Телеметрия запусков лаунчера</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Состояние базы аналитики</div>
+          <div class="kpi-val" style="color:#34D399;font-size:24px;">Cloudflare D1</div>
+          <div class="kpi-trend trend-up">⚡ Ответ: <span id="dbLatency">~120ms</span></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">🎮 Реальные версии Minecraft</div>
+            <span style="font-size:12px;color:var(--text-muted);">По статистике запусков игроков</span>
+          </div>
+          <div id="versionsContainer">
+            <div style="color:var(--text-dim);font-size:13px;">Загрузка данных из Cloudflare D1...</div>
+          </div>
+        </div>
+
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">⚡ Реальные загрузчики модов</div>
+            <span style="font-size:12px;color:var(--text-muted);">Выбор игроков в лаунчере</span>
+          </div>
+          <div id="loadersContainer">
+            <div style="color:var(--text-dim);font-size:13px;">Загрузка данных из Cloudflare D1...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Живой журнал недавней активности игроков -->
+      <div class="panel-box">
+        <div class="panel-header">
+          <div class="panel-title">⚡ Живой журнал недавней активности игроков (Live Stream)</div>
+          <span style="font-size:12px;color:var(--cyan);">Реальные события без накрутки</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Время</th>
+                <th>Событие</th>
+                <th>Версия Minecraft</th>
+                <th>Ядро / Загрузчик</th>
+                <th>Операционная система</th>
+              </tr>
+            </thead>
+            <tbody id="recentEventsTable">
+              <tr><td colspan="5" style="color:var(--text-dim);text-align:center;padding:24px;">Загрузка последних событий...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+        <!-- ВКЛАДКА 2: LIVE-МОНИТОРИНГ MINECRAFT СЕРВЕРОВ В РЕАЛЬНОМ ВРЕМЕНИ -->
+    <div id="tab-servers" class="tab-pane">
+
+      <!-- ПАНЕЛЬ УПРАВЛЕНИЯ РЕАЛЬНЫМ ВРЕМЕНЕМ -->
+      <div class="rt-control-strip">
+        <div class="rt-status-group">
+          <div class="live-pill" id="rtLiveBadge">
+            <span class="live-dot"></span>
+            <span>LIVE МОНИТОРИНГ: <strong id="rtStatusLabel" style="color:#10B981;">АКТИВЕН</strong></span>
+          </div>
+          <div class="rt-countdown-box">
+            <span>⏱ След. опрос:</span>
+            <span id="rtCountdownSec" class="rt-countdown-val">3.0с</span>
+            <div class="rt-countdown-bar"><div id="rtCountdownFill" class="rt-countdown-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="rt-actions-group">
+          <div class="rt-interval-selector">
+            <span style="font-size:12px;color:var(--text-dim);font-weight:600;margin-right:2px;">Интервал:</span>
+            <button type="button" class="rt-chip" onclick="setRtInterval(1000)" data-ms="1000">1с</button>
+            <button type="button" class="rt-chip active" onclick="setRtInterval(3000)" data-ms="3000">3с</button>
+            <button type="button" class="rt-chip" onclick="setRtInterval(5000)" data-ms="5000">5с</button>
+            <button type="button" class="rt-chip" onclick="setRtInterval(10000)" data-ms="10000">10с</button>
+          </div>
+
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" id="rtPauseBtn" onclick="toggleRtMonitoring()">
+              <span id="rtPauseIcon">⏸</span> <span id="rtPauseText">Пауза</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="triggerImmediatePing()" title="Опросить сокет немедленно">
+              ⚡ Пинг сейчас
+            </button>
+            <button class="btn btn-secondary btn-sm" id="rtSoundBtn" onclick="toggleRtSound()" title="Звук при изменении онлайна">
+              <span id="rtSoundIcon">🔇</span> Звук: <strong id="rtSoundText">ВЫКЛ</strong>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- БЫСТРЫЙ ВЫБОР СЕРВЕРА ИЗ МОНИТОРИНГА -->
+      <div class="rt-server-switcher-box">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+          <span>🎯 Выберите целевой сервер для фокуса:</span>
+          <span id="rtSyncStatus" style="font-size:11px;color:var(--cyan);font-weight:600;">☁ Синхронизировано с API KS</span>
+        </div>
+        <div class="rt-server-pills" id="rtServerPills">
+          <!-- Заполняется динамически -->
+        </div>
+      </div>
+
+      <!-- KPI КАРТОЧКИ В РЕАЛЬНОМ ВРЕМЕНИ -->
+      <div class="kpi-grid" style="margin-bottom:20px;">
+        <div class="kpi-card" id="rtCardOnline">
+          <div class="kpi-label" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>👥 Онлайн в реальном времени</span>
+            <span id="rtOnlineDelta" class="rt-delta-pill delta-neutral">= 0</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <div class="kpi-val" id="rtLiveOnlineVal" style="font-size:38px;color:#38BDF8;">--</div>
+            <div style="font-size:16px;color:var(--text-dim);font-weight:700;" id="rtLiveMaxVal">/ --</div>
+          </div>
+          <div class="stat-bar-bg" style="margin-top:10px;height:6px;">
+            <div id="rtSlotFillBar" class="stat-bar-fill" style="width:0%;background:linear-gradient(90deg,#06B6D4,#3B82F6);"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--text-muted);margin-top:6px;">
+            <span id="rtOnlineStatusDesc">Опрос сокета...</span>
+            <span id="rtSlotFillPct">0% заполнено</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">⚡ Отклик сокета (Ping RTT)</div>
+          <div class="kpi-val" id="rtLivePingVal" style="font-size:38px;color:#34D399;">-- ms</div>
+          <div class="kpi-trend" id="rtPingQualityBadge" style="color:#10B981;">● Оценка: ...</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;">
+            Мин: <strong id="rtPingMin" style="color:#FFF;">--</strong> · Макс: <strong id="rtPingMax" style="color:#FFF;">--</strong> · Средний: <strong id="rtPingAvg" style="color:#FFF;">--</strong>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">📈 Рекорды сессии мониторинга</div>
+          <div style="display:flex;gap:16px;margin-top:4px;">
+            <div>
+              <div style="font-size:11px;color:var(--text-dim);font-weight:700;">ПИК (MAX)</div>
+              <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:24px;font-weight:900;color:#F59E0B;" id="rtSessionPeak">0</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text-dim);font-weight:700;">МИНИМУМ (MIN)</div>
+              <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:24px;font-weight:900;color:#94A3B8;" id="rtSessionMin">0</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text-dim);font-weight:700;">ОПРОСОВ ВСЕГО</div>
+              <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:24px;font-weight:900;color:var(--cyan);" id="rtPollTotalCount">0</div>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:8px;" id="rtSessionUptime">Сессия: 0м 0с</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">🎮 Платформа и протокол</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+            <img id="rtServerFavicon" style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border-sub);display:none;">
+            <div>
+              <div style="font-weight:800;font-size:15px;color:#FFF;" id="rtServerSoftware">Minecraft Server</div>
+              <div style="font-size:12px;color:var(--cyan);" id="rtServerVersion">Версия: ...</div>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:8px;" id="rtProtocolInfo">
+            Протокол: -- · Режим: Выживание
+          </div>
+        </div>
+      </div>
+
+      <!-- ГРАФИК ОНЛАЙНА В РЕАЛЬНОМ ВРЕМЕНИ -->
+      <div class="panel-box" style="margin-bottom:24px;">
+        <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="panel-title" style="display:flex;align-items:center;gap:8px;">
+            <span>📊 График онлайна в реальном времени (Live Timeline)</span>
+            <span class="live-dot" style="width:6px;height:6px;"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-dim);">
+            <span>Точек на графике: <strong id="rtChartPointsCount" style="color:var(--cyan);">0</strong></span>
+            <button class="btn btn-secondary btn-sm" onclick="clearChartHistory()" style="padding:4px 10px;font-size:11px;">Очистить график</button>
+          </div>
+        </div>
+        <div style="position:relative;width:100%;height:190px;">
+          <canvas id="liveChartCanvas" style="width:100%;height:100%;display:block;"></canvas>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:8px;padding:0 10px;">
+          <span id="rtChartStartTime">Старт: --:--:--</span>
+          <span>⚡ Линия смещается в реальном времени при каждом сетевом ответе</span>
+          <span id="rtChartLatestTime">Текущий срез: --:--:--</span>
+        </div>
+      </div>
+
+      <!-- ИГРОКИ ОНЛАЙН (3D СКИНЫ) И MOTD СЕРВЕРА -->
+      <div class="grid-2" style="margin-bottom:24px;">
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">👤 Игроки в сети (<span id="rtPlayerSampleCount">0</span>)</div>
+            <span style="font-size:11px;color:var(--text-dim);">Аватары со скинами</span>
+          </div>
+          <div id="rtPlayerListGallery" style="display:flex;flex-wrap:wrap;gap:8px;min-height:90px;align-items:center;padding:10px 0;">
+            <div style="color:var(--text-dim);font-size:13px;">Опрос сокета для получения списка игроков...</div>
+          </div>
+        </div>
+
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">📜 MOTD и статус сервера</div>
+            <button class="btn btn-secondary btn-sm" id="rtSetFeaturedBtn" onclick="setFocusedAsFeatured()">★ Сделать витриной в лаунчере</button>
+          </div>
+          <div id="rtMotdBox" class="motd-box" style="min-height:90px;font-size:13px;line-height:1.6;">
+            Ожидание ответа MOTD...
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:12px;color:var(--text-muted);">
+            <div>IP: <code id="rtFocusedIpDisplay" style="color:var(--cyan);font-weight:700;">play.kslauncher.ru</code></div>
+            <button class="btn btn-secondary btn-sm" onclick="copyFocusedIp()" style="padding:3px 8px;font-size:11px;">📋 Скопировать IP</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- УПРАВЛЕНИЕ СПИСКОМ СЕРВЕРОВ (ДОБАВИТЬ / УДАЛИТЬ) -->
+      <div class="grid-2">
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">➕ Добавить новый сервер в мониторинг</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">IP адрес или домен сервера (Minecraft SLP)</label>
+            <input type="text" id="srvIpInput" placeholder="Например: play.kslauncher.ru или mc.hypixel.net" value="play.kslauncher.ru">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Название сервера</label>
+            <input type="text" id="srvNameInput" placeholder="Например: KS Network · Анархия">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Режим и описание</label>
+            <input type="text" id="srvDescInput" placeholder="Например: Кланы, экономика, квесты. Версия 1.20.4+">
+          </div>
+          <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+            <input type="checkbox" id="srvFeaturedCheck" style="width:18px;height:18px;cursor:pointer;">
+            <label for="srvFeaturedCheck" style="font-size:13px;font-weight:600;cursor:pointer;">Сделать главным сервером на витрине лаунчера</label>
+          </div>
+          <button class="btn" style="width:100%;margin-top:8px;" onclick="saveServer()">💾 Добавить сервер в мониторинг</button>
+        </div>
+
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">🌐 Все серверы в пуле мониторинга (<span id="srvCount">0</span>)</div>
+            <button class="btn btn-secondary btn-sm" onclick="pingAllMonitoredServers()">⚡ Пропинговать все</button>
+          </div>
+          <div id="serversList"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ВКЛАДКА 3: УПРАВЛЕНИЕ НОВОСТЯМИ -->
+    <div id="tab-news" class="tab-pane">
+      <div class="grid-2">
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">✍ Создать новую публикацию</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Заголовок новости</label>
+            <input type="text" id="newsTitleInput" placeholder="Например: Старт нового сезона и вайп!">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Тип плашки / Категория</label>
+            <select id="newsBadgeSelect">
+              <option value="🔥 НОВОСТЬ ДНЯ">🔥 НОВОСТЬ ДНЯ (Главное)</option>
+              <option value="⚡ ОБНОВЛЕНИЕ">⚡ ОБНОВЛЕНИЕ ЛАУНЧЕРА</option>
+              <option value="🎉 ВАЙП И СЕЗОН">🎉 ВАЙП И СЕЗОН</option>
+              <option value="🏆 ТУРНИР / ИВЕНТ">🏆 ТУРНИР / ИВЕНТ</option>
+              <option value="📢 ОБЪЯВЛЕНИЕ">📢 ВАЖНОЕ ОБЪЯВЛЕНИЕ</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Краткий текст (для главного экрана лаунчера)</label>
+            <textarea id="newsDescInput" placeholder="Краткое описание в 1-2 предложениях для витрины лаунчера…"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Ключевые фичи (через запятую)</label>
+            <input type="text" id="newsTagsInput" placeholder="Например: Все ядра CPU активны, Без лагов, Новая генерация">
+          </div>
+
+          <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+            <input type="checkbox" id="newsPinCheck" checked style="width:18px;height:18px;cursor:pointer;">
+            <label for="newsPinCheck" style="font-size:13px;font-weight:600;cursor:pointer;">Вывести как «Главную новость» в лаунчере</label>
+          </div>
+
+          <button class="btn" style="width:100%;margin-top:8px;" onclick="addNews()">🚀 Опубликовать новость</button>
+        </div>
+
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">📋 Опубликованные новости (<span id="newsCount">0</span>)</div>
+          </div>
+          <div id="newsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ВКЛАДКА 4: НАСТРОЙКИ И БЭКАП -->
+    <div id="tab-settings" class="tab-pane">
+      <div class="grid-2">
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">🔑 Смена мастер-пароля админки</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Текущий пароль</label>
+            <input type="password" id="curPassInput">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Новый мастер-пароль</label>
+            <input type="password" id="newPassInput" placeholder="Минимум 6 символов…">
+          </div>
+          <button class="btn btn-secondary" onclick="changeAdminPassword()">Сохранить новый пароль</button>
+        </div>
+
+        <div class="panel-box">
+          <div class="panel-header">
+            <div class="panel-title">📦 Экспорт и импорт данных</div>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Вы можете сохранить полную копию настроенных новостей и серверов в один клик или восстановить их на другом устройстве.</p>
+          <div style="display:flex;gap:12px;margin-bottom:16px;">
+            <button class="btn btn-secondary" onclick="exportData()">📥 Скачать бэкап JSON</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">📤 Загрузить бэкап</button>
+            <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importData(event)">
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="resetDefaultData()">Сбросить к исходным настройкам</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toast">✔ Изменения сохранены</div>
+
+  <script>
+    const API_BASE = "https://kslauncher-api.nerck522.workers.dev";
+
+    const DEFAULT_DATA = {
+      adminPass: "ksadmin2026",
+      news: [
+        {
+          id: "news-1",
+          title: "Глобальный вайп и старт нового сезона!",
+          badge: "🔥 НОВОСТЬ ДНЯ",
+          desc: "Новая генерация мира, ускоренная прогрузка чанков, автозагрузка модов и обновлённые клановые войны.",
+          tags: ["🚀 Все ядра CPU активны", "⚡ Без лагов при создании мира"],
+          date: "24 Ноября 2026",
+          isFeatured: true
+        },
+        {
+          id: "news-2",
+          title: "KS Launcher v0.2.0 — Добавлена библиотека модов",
+          badge: "⚡ ОБНОВЛЕНИЕ",
+          desc: "Появилась поддержка установки сборок на любой диск (D:, E:), улучшена оптимизация и добавлен жирный контрастный логотип.",
+          tags: ["Библиотека", "Диски D/E"],
+          date: "23 Ноября 2026",
+          isFeatured: false
+        }
+      ],
+      servers: [
+        {
+          id: "srv-1",
+          name: "KS Network · Официальные сервера",
+          ip: "play.kslauncher.ru",
+          desc: "Серверы готовятся к открытию нового сезона. Скоро здесь появится мониторинг популярных режимов с автоподключением. А пока вы можете играть в одиночном режиме или со своими сборками модов!",
+          online: 0,
+          max: 500,
+          status: "none",
+          ping: "18 ms",
+          isFeatured: true
+        }
+      ]
+    };
+
+    function loadData() {
+      const saved = localStorage.getItem("ks_admin_data");
+      let data = { ...DEFAULT_DATA };
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          data = { ...DEFAULT_DATA, ...parsed };
+          if (!data.adminPass) data.adminPass = DEFAULT_DATA.adminPass;
+          if (!data.servers || data.servers.length === 0) data.servers = DEFAULT_DATA.servers;
+          if (!data.news || data.news.length === 0) data.news = DEFAULT_DATA.news;
+        } catch (e) {
+          data = { ...DEFAULT_DATA };
+        }
+      }
+      localStorage.setItem("ks_admin_data", JSON.stringify(data));
+      return data;
+    }
+
+    function saveData(data) {
+      localStorage.setItem("ks_admin_data", JSON.stringify(data));
+      showToast("✔ Сохранено успешно!");
+      renderAll();
+    }
+
+    let appData = loadData();
+
+    // Авторизация
+    function checkAuth() {
+      const isAuth = sessionStorage.getItem("ks_admin_logged");
+      if (isAuth === "true") {
+        document.getElementById("authOverlay").style.display = "none";
+        renderAll();
+        refreshTelemetry(false);
+      } else {
+        document.getElementById("authOverlay").style.display = "flex";
+      }
+    }
+
+    function togglePassVisibility() {
+      const inp = document.getElementById("adminKeyInput");
+      if (inp.type === "password") {
+        inp.type = "text";
+      } else {
+        inp.type = "password";
+      }
+    }
+
+    function quickFillPass() {
+      const inp = document.getElementById("adminKeyInput");
+      inp.value = "ksadmin2026";
+      login();
+    }
+
+    function resetAdminStorage() {
+      localStorage.removeItem("ks_admin_data");
+      appData = loadData();
+      const inp = document.getElementById("adminKeyInput");
+      inp.value = "ksadmin2026";
+      showToast("🔄 Кэш сброшен на значения по умолчанию. Пароль: ksadmin2026");
+      const err = document.getElementById("authError");
+      if (err) err.style.display = "none";
+    }
+
+    function login() {
+      const raw = document.getElementById("adminKeyInput").value || "";
+      // Очистка от пробелов, невидимых символов и переносов
+      const val = raw.replace(/[\u200B-\u200D\uFEFF\u00A0\r\n\t]/g, '').trim();
+      const err = document.getElementById("authError");
+      const configuredPass = (appData && appData.adminPass) ? appData.adminPass : "ksadmin2026";
+
+      // Разрешаем текущий пароль, дефолтный мастер-ключ ksadmin2026 или admin
+      if (val === configuredPass || val.toLowerCase() === "ksadmin2026" || val.toLowerCase() === "admin") {
+        sessionStorage.setItem("ks_admin_logged", "true");
+        document.getElementById("authOverlay").style.display = "none";
+        if (err) err.style.display = "none";
+        showToast("Добро пожаловать в панель управления!");
+        renderAll();
+        refreshTelemetry(true);
+      } else {
+        if (err) {
+          err.innerHTML = "Неверный мастер-ключ администратора!<br><span style='font-size:11px;color:var(--text-muted);'>Нажмите кнопку «Ввести ksadmin2026» ниже</span>";
+          err.style.display = "block";
+        }
+      }
+    }
+
+    function logout() {
+      sessionStorage.removeItem("ks_admin_logged");
+      location.reload();
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+      
+      const btn = Array.from(document.querySelectorAll(".tab-btn")).find(b => b.getAttribute("onclick").includes(tabId));
+      if (btn) btn.classList.add("active");
+      
+      const pane = document.getElementById("tab-" + tabId);
+      if (pane) pane.classList.add("active");
+
+      if (tabId === 'analytics') {
+        refreshTelemetry(false);
+      } else if (tabId === 'servers') {
+        startRtLoop();
+        renderServerPills();
+        setTimeout(renderLiveChart, 60);
+      }
+    }
+
+    // --- РЕАЛЬНАЯ АНАЛИТИКА ИЗ ОБЛАЧНОЙ БД D1 ---
+    async function refreshTelemetry(showNotification) {
+      const start = performance.now();
+      try {
+        const res = await fetch(`${API_BASE}/v1/telemetry/stats`);
+        const latency = Math.round(performance.now() - start);
+        document.getElementById("dbLatency").textContent = `~${latency}ms`;
+
+        if (res.ok) {
+          const stats = await res.json();
+          document.getElementById("kpiUniqueUsers").textContent = stats.uniqueUsers || 0;
+          document.getElementById("kpiActiveToday").textContent = stats.activeToday || 0;
+          document.getElementById("kpiTotalEvents").textContent = stats.totalEvents || 0;
+
+          // Версии
+          const vContainer = document.getElementById("versionsContainer");
+          if (stats.versions && stats.versions.length > 0) {
+            const totalV = stats.versions.reduce((acc, v) => acc + v.count, 0) || 1;
+            vContainer.innerHTML = stats.versions.map(v => {
+              const pct = Math.round((v.count / totalV) * 100);
+              return `
+                <div class="stat-row">
+                  <div class="stat-meta"><span>${escapeHtml(v.version)}</span><span style="color:var(--cyan);">${pct}% (${v.count} запуск.)</span></div>
+                  <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${pct}%;"></div></div>
+                </div>
+              `;
+            }).join('');
+          } else {
+            vContainer.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:12px 0;">Ожидание первого запуска лаунчера игроками...</div>';
+          }
+
+          // Загрузчики
+          const lContainer = document.getElementById("loadersContainer");
+          if (stats.loaders && stats.loaders.length > 0) {
+            const totalL = stats.loaders.reduce((acc, l) => acc + l.count, 0) || 1;
+            lContainer.innerHTML = stats.loaders.map(l => {
+              const pct = Math.round((l.count / totalL) * 100);
+              return `
+                <div class="stat-row">
+                  <div class="stat-meta"><span>${escapeHtml(l.loader.toUpperCase())}</span><span style="color:#A855F7;">${pct}% (${l.count})</span></div>
+                  <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,#9333EA,#A855F7);"></div></div>
+                </div>
+              `;
+            }).join('');
+          } else {
+            lContainer.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:12px 0;">Ожидание первого запуска лаунчера игроками...</div>';
+          }
+
+          // Таблица живых событий
+          const tbody = document.getElementById("recentEventsTable");
+          if (stats.recentEvents && stats.recentEvents.length > 0) {
+            tbody.innerHTML = stats.recentEvents.map(ev => {
+              const dateStr = new Date(ev.created_at).toLocaleTimeString("ru-RU", { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " · " + new Date(ev.created_at).toLocaleDateString("ru-RU");
+              const evBadge = ev.event_type === 'game_start' ? '<span style="color:#10B981;font-weight:700;">▶ Запуск игры</span>' : '<span style="color:var(--cyan);font-weight:700;">⚡ Открытие лаунчера</span>';
+              return `
+                <tr>
+                  <td style="color:var(--text-dim);font-family:monospace;font-size:12px;">${dateStr}</td>
+                  <td>${evBadge}</td>
+                  <td><code style="color:#F1F5F9;">${escapeHtml(ev.version || '1.20.4')}</code></td>
+                  <td><span class="badge-tag badge-update">${escapeHtml((ev.loader || 'vanilla').toUpperCase())}</span></td>
+                  <td style="color:var(--text-muted);">${escapeHtml(ev.os || 'Windows')}</td>
+                </tr>
+              `;
+            }).join('');
+          } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim);text-align:center;padding:16px;">Пока нет зарегистрированных событий в базе данных</td></tr>';
+          }
+
+          if (showNotification) showToast("Данные аналитики D1 обновлены!");
+        }
+      } catch (err) {
+        console.error("Telemetry fetch failed", err);
+      }
+    }
+
+    async function resetTelemetryData() {
+      if (!confirm("Вы уверены, что хотите сбросить всю историю аналитики в облачной базе Cloudflare D1?")) return;
+      try {
+        const res = await fetch(`${API_BASE}/v1/telemetry/reset`, { method: "POST" });
+        if (res.ok) {
+          showToast("🗑 База телеметрии успешно очищена!");
+          refreshTelemetry(false);
+        } else {
+          showToast("Ошибка при сбросе аналитики");
+        }
+      } catch {
+        showToast("Ошибка сетевого запроса к API");
+      }
+    }
+
+        // --- РЕАЛЬНЫЙ LIVE-МОНИТОРИНГ MINECRAFT В РЕАЛЬНОМ ВРЕМЕНИ (MCSrvStat Socket) ---
+    let liveMonitoring = {
+      active: true,
+      intervalMs: 3000,
+      timerId: null,
+      countdownTimerId: null,
+      nextPollAt: Date.now() + 3000,
+      targetServer: "play.kslauncher.ru",
+      soundEnabled: false,
+      history: [],
+      lastOnline: null,
+      peakOnline: 0,
+      minOnline: 999999,
+      pingMin: 9999,
+      pingMax: 0,
+      totalPings: 0,
+      pingSum: 0,
+      pollCount: 0,
+      sessionStart: Date.now(),
+      inFlight: false
+    };
+
+    function initRealtimeMonitoring() {
+      // Find featured server or first server
+      const featured = appData.servers.find(s => s.isFeatured) || appData.servers[0];
+      if (featured && featured.ip) {
+        liveMonitoring.targetServer = featured.ip;
+      }
+      renderServerPills();
+      startRtLoop();
+      startCountdownLoop();
+      window.addEventListener('resize', () => renderLiveChart());
+    }
+
+    function startRtLoop() {
+      if (liveMonitoring.timerId) clearInterval(liveMonitoring.timerId);
+      if (!liveMonitoring.active) return;
+      liveMonitoring.nextPollAt = Date.now() + liveMonitoring.intervalMs;
+      
+      // Perform immediate first ping
+      pollServerLive(liveMonitoring.targetServer);
+
+      liveMonitoring.timerId = setInterval(() => {
+        if (!liveMonitoring.active) return;
+        pollServerLive(liveMonitoring.targetServer);
+        liveMonitoring.nextPollAt = Date.now() + liveMonitoring.intervalMs;
+      }, liveMonitoring.intervalMs);
+    }
+
+    function startCountdownLoop() {
+      if (liveMonitoring.countdownTimerId) clearInterval(liveMonitoring.countdownTimerId);
+      liveMonitoring.countdownTimerId = setInterval(() => {
+        const el = document.getElementById("rtCountdownSec");
+        const fill = document.getElementById("rtCountdownFill");
+        const uptimeEl = document.getElementById("rtSessionUptime");
+        
+        if (uptimeEl) {
+          const upSec = Math.floor((Date.now() - liveMonitoring.sessionStart) / 1000);
+          const m = Math.floor(upSec / 60);
+          const s = upSec % 60;
+          uptimeEl.textContent = `Сессия: ${m}м ${s}с`;
+        }
+
+        if (!liveMonitoring.active) {
+          if (el) el.textContent = "Пауза";
+          if (fill) fill.style.width = "0%";
+          return;
+        }
+
+        const remMs = Math.max(0, liveMonitoring.nextPollAt - Date.now());
+        const sec = (remMs / 1000).toFixed(1);
+        if (el) el.textContent = `${sec}с`;
+        if (fill) {
+          const pct = Math.min(100, Math.max(0, (1 - (remMs / liveMonitoring.intervalMs)) * 100));
+          fill.style.width = `${pct}%`;
+        }
+      }, 100);
+    }
+
+    async function pollServerLive(ip) {
+      if (!ip || liveMonitoring.inFlight) return;
+      liveMonitoring.inFlight = true;
+
+      const cardOnline = document.getElementById("rtCardOnline");
+      const onlineEl = document.getElementById("rtLiveOnlineVal");
+      const maxEl = document.getElementById("rtLiveMaxVal");
+      const deltaEl = document.getElementById("rtOnlineDelta");
+      const descEl = document.getElementById("rtOnlineStatusDesc");
+      const fillBar = document.getElementById("rtSlotFillBar");
+      const fillPct = document.getElementById("rtSlotFillPct");
+      
+      const pingEl = document.getElementById("rtLivePingVal");
+      const pingQual = document.getElementById("rtPingQualityBadge");
+      const pMinEl = document.getElementById("rtPingMin");
+      const pMaxEl = document.getElementById("rtPingMax");
+      const pAvgEl = document.getElementById("rtPingAvg");
+      
+      const peakEl = document.getElementById("rtSessionPeak");
+      const minEl = document.getElementById("rtSessionMin");
+      const totalPollsEl = document.getElementById("rtPollTotalCount");
+
+      const iconImg = document.getElementById("rtServerFavicon");
+      const softEl = document.getElementById("rtServerSoftware");
+      const verEl = document.getElementById("rtServerVersion");
+      const protoEl = document.getElementById("rtProtocolInfo");
+      const motdBox = document.getElementById("rtMotdBox");
+      const playersGallery = document.getElementById("rtPlayerListGallery");
+      const sampleCountEl = document.getElementById("rtPlayerSampleCount");
+      const focusedIpDisp = document.getElementById("rtFocusedIpDisplay");
+
+      if (focusedIpDisp) focusedIpDisp.textContent = ip;
+
+      const t0 = performance.now();
+      try {
+        const res = await fetch(`https://api.mcsrvstat.us/3/${encodeURIComponent(ip)}`);
+        const rtt = Math.round(performance.now() - t0);
+        const data = await res.json();
+
+        liveMonitoring.pollCount++;
+        if (totalPollsEl) totalPollsEl.textContent = liveMonitoring.pollCount;
+
+        // Ping metrics
+        liveMonitoring.totalPings++;
+        liveMonitoring.pingSum += rtt;
+        if (rtt < liveMonitoring.pingMin) liveMonitoring.pingMin = rtt;
+        if (rtt > liveMonitoring.pingMax) liveMonitoring.pingMax = rtt;
+        const avgPing = Math.round(liveMonitoring.pingSum / liveMonitoring.totalPings);
+
+        if (pingEl) pingEl.textContent = `${rtt} ms`;
+        if (pMinEl) pMinEl.textContent = `${liveMonitoring.pingMin} ms`;
+        if (pMaxEl) pMaxEl.textContent = `${liveMonitoring.pingMax} ms`;
+        if (pAvgEl) pAvgEl.textContent = `${avgPing} ms`;
+
+        if (pingQual) {
+          if (rtt < 50) {
+            pingQual.textContent = "● Отличное соединение (<50ms)";
+            pingQual.style.color = "#10B981";
+          } else if (rtt < 120) {
+            pingQual.textContent = "● Нормальный отклик (<120ms)";
+            pingQual.style.color = "#F59E0B";
+          } else {
+            pingQual.textContent = "● Высокий отклик (>120ms)";
+            pingQual.style.color = "#F43F5E";
+          }
+        }
+
+        if (data && data.online) {
+          const currentOnline = data.players?.online || 0;
+          const maxPlayers = data.players?.max || 500;
+
+          // Check delta
+          let delta = 0;
+          if (liveMonitoring.lastOnline !== null) {
+            delta = currentOnline - liveMonitoring.lastOnline;
+          }
+
+          if (deltaEl) {
+            if (delta > 0) {
+              deltaEl.textContent = `▲ +${delta}`;
+              deltaEl.className = "rt-delta-pill delta-up";
+              playTone(720, 0.12, 'sine');
+            } else if (delta < 0) {
+              deltaEl.textContent = `▼ ${delta}`;
+              deltaEl.className = "rt-delta-pill delta-down";
+              playTone(400, 0.12, 'triangle');
+            } else {
+              deltaEl.textContent = "= 0";
+              deltaEl.className = "rt-delta-pill delta-neutral";
+            }
+          }
+
+          // Records
+          if (currentOnline > liveMonitoring.peakOnline) liveMonitoring.peakOnline = currentOnline;
+          if (currentOnline < liveMonitoring.minOnline) liveMonitoring.minOnline = currentOnline;
+
+          if (peakEl) peakEl.textContent = liveMonitoring.peakOnline;
+          if (minEl) minEl.textContent = liveMonitoring.minOnline === 999999 ? currentOnline : liveMonitoring.minOnline;
+
+          if (onlineEl) onlineEl.textContent = currentOnline.toLocaleString("ru-RU");
+          if (maxEl) maxEl.textContent = `/ ${maxPlayers.toLocaleString("ru-RU")}`;
+
+          const pct = Math.min(100, Math.round((currentOnline / (maxPlayers || 1)) * 100));
+          if (fillBar) fillBar.style.width = `${pct}%`;
+          if (fillPct) fillPct.textContent = `${pct}% слотов занято`;
+          if (descEl) descEl.innerHTML = `<span style="color:#10B981;font-weight:700;">● Сервер в сети</span> · Minecraft SLP активен`;
+
+          // Pulse flash on online change
+          if (cardOnline && delta !== 0) {
+            cardOnline.classList.remove("pulse-flash");
+            void cardOnline.offsetWidth;
+            cardOnline.classList.add("pulse-flash");
+          }
+
+          // Icon
+          if (iconImg) {
+            if (data.icon) {
+              iconImg.src = data.icon;
+              iconImg.style.display = "block";
+            } else {
+              iconImg.style.display = "none";
+            }
+          }
+
+          // Software & Version
+          if (softEl) softEl.textContent = data.software || "Paper / Velocity / Spigot";
+          if (verEl) verEl.textContent = `Версия: ${data.version || '1.20.4'}`;
+          if (protoEl) protoEl.textContent = `Протокол: ${data.protocol?.version || data.protocol || '765'} · EULA: OK`;
+
+          // MOTD
+          if (motdBox) {
+            if (data.motd && data.motd.html && data.motd.html.length > 0) {
+              motdBox.innerHTML = data.motd.html.join("<br>");
+            } else if (data.motd && data.motd.clean) {
+              motdBox.textContent = data.motd.clean.join("\n");
+            } else {
+              motdBox.textContent = "Официальный сервер KS Network";
+            }
+          }
+
+          // Players sample
+          const list = data.players?.list || [];
+          if (sampleCountEl) sampleCountEl.textContent = list.length;
+          if (playersGallery) {
+            if (list.length > 0) {
+              playersGallery.innerHTML = list.map(p => {
+                const name = typeof p === 'string' ? p : (p.name || 'Player');
+                return `
+                  <div class="player-chip" title="Игрок ${escapeHtml(name)}">
+                    <img src="https://mc-heads.net/avatar/${encodeURIComponent(name)}/32" onerror="this.src='https://mc-heads.net/avatar/MHF_Steve/32'">
+                    <span>${escapeHtml(name)}</span>
+                  </div>
+                `;
+              }).join('');
+            } else {
+              playersGallery.innerHTML = `<div style="color:var(--text-dim);font-size:12.5px;">👥 Игроков онлайн: ${currentOnline}. Сервер не передает список никнеймов в открытом SLP (защита от парсинга ботами).</div>`;
+            }
+          }
+
+          // Push to history
+          const nowStr = new Date().toLocaleTimeString("ru-RU", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          liveMonitoring.history.push({ time: nowStr, online: currentOnline, ping: rtt });
+          if (liveMonitoring.history.length > 30) liveMonitoring.history.shift();
+
+          liveMonitoring.lastOnline = currentOnline;
+
+          // Update server object in appData
+          const sObj = appData.servers.find(s => s.ip === ip);
+          if (sObj) {
+            sObj.online = currentOnline;
+            sObj.max = maxPlayers;
+            sObj.status = "online";
+            sObj.ping = `${rtt} ms`;
+          }
+        } else {
+          // Server Offline or 0 online
+          if (onlineEl) onlineEl.textContent = "0";
+          if (maxEl) maxEl.textContent = "/ 0";
+          if (deltaEl) {
+            deltaEl.textContent = "Офлайн";
+            deltaEl.className = "rt-delta-pill delta-neutral";
+          }
+          if (descEl) descEl.innerHTML = `<span style="color:#94A3B8;">● Пока что никто не играет (0 онлайн / Офлайн)</span>`;
+          if (motdBox) motdBox.textContent = "Сервер недоступен или находится на техобслуживании.";
+          if (playersGallery) playersGallery.innerHTML = `<div style="color:var(--text-dim);font-size:13px;">Сервер не ответил на опрос сокета.</div>`;
+          if (iconImg) iconImg.style.display = "none";
+          if (fillBar) fillBar.style.width = "0%";
+          if (fillPct) fillPct.textContent = "0%";
+
+          const nowStr = new Date().toLocaleTimeString("ru-RU", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          liveMonitoring.history.push({ time: nowStr, online: 0, ping: rtt });
+          if (liveMonitoring.history.length > 30) liveMonitoring.history.shift();
+
+          const sObj = appData.servers.find(s => s.ip === ip);
+          if (sObj) {
+            sObj.online = 0;
+            sObj.status = "none";
+          }
+        }
+
+        renderLiveChart();
+        renderServerPills();
+      } catch (err) {
+        console.error("Live poll error", err);
+      } finally {
+        liveMonitoring.inFlight = false;
+      }
+    }
+
+    function renderServerPills() {
+      const container = document.getElementById("rtServerPills");
+      if (!container) return;
+      container.innerHTML = "";
+
+      appData.servers.forEach((srv) => {
+        const isFocused = srv.ip === liveMonitoring.targetServer;
+        const pill = document.createElement("div");
+        pill.className = `rt-server-pill ${isFocused ? 'active' : ''} ${srv.status === 'online' ? 'online' : ''}`;
+        pill.onclick = () => setFocusedServer(srv.ip);
+        
+        const countText = srv.status === 'online' ? `${srv.online} онл.` : '0 онл.';
+        pill.innerHTML = `
+          <span class="dot"></span>
+          <span>${srv.isFeatured ? '★ ' : ''}${escapeHtml(srv.name || srv.ip)}</span>
+          <span style="font-family:monospace;font-size:11px;color:var(--cyan);margin-left:4px;">(${countText})</span>
+        `;
+        container.appendChild(pill);
+      });
+    }
+
+    function setFocusedServer(ip) {
+      if (liveMonitoring.targetServer === ip) return;
+      liveMonitoring.targetServer = ip;
+      liveMonitoring.history = [];
+      liveMonitoring.lastOnline = null;
+      liveMonitoring.totalPings = 0;
+      liveMonitoring.pingSum = 0;
+      liveMonitoring.pingMin = 9999;
+      liveMonitoring.pingMax = 0;
+      liveMonitoring.peakOnline = 0;
+      liveMonitoring.minOnline = 999999;
+      
+      showToast(`🎯 Фокус переключен на ${ip}`);
+      renderServerPills();
+      pollServerLive(ip);
+      renderLiveChart();
+    }
+
+    function renderLiveChart() {
+      const canvas = document.getElementById("liveChartCanvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const w = canvas.width = (rect.width || 800) * dpr;
+      const h = canvas.height = (rect.height || 180) * dpr;
+      ctx.scale(dpr, dpr);
+
+      const viewW = rect.width || 800;
+      const viewH = rect.height || 180;
+      ctx.clearRect(0, 0, viewW, viewH);
+
+      const pts = liveMonitoring.history;
+      const pointsCountEl = document.getElementById("rtChartPointsCount");
+      const startTimeEl = document.getElementById("rtChartStartTime");
+      const latestTimeEl = document.getElementById("rtChartLatestTime");
+
+      if (pointsCountEl) pointsCountEl.textContent = pts.length;
+      if (pts.length > 0) {
+        if (startTimeEl) startTimeEl.textContent = `Старт: ${pts[0].time}`;
+        if (latestTimeEl) latestTimeEl.textContent = `Текущий срез: ${pts[pts.length - 1].time}`;
+      }
+
+      if (!pts || pts.length < 2) {
+        ctx.fillStyle = "#64748B";
+        ctx.font = "13px 'Segoe UI', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Сбор динамики онлайна в реальном времени... (нужно 2+ точки опроса)", viewW / 2, viewH / 2);
+        return;
+      }
+
+      const values = pts.map(p => p.online);
+      let maxVal = Math.max(...values, 10);
+      let minVal = 0;
+      // Add headroom
+      maxVal = Math.ceil(maxVal * 1.15);
+
+      const padL = 50;
+      const padR = 25;
+      const padT = 20;
+      const padB = 30;
+      const drawW = viewW - padL - padR;
+      const drawH = viewH - padT - padB;
+
+      // Draw horizontal grid lines
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+      ctx.lineWidth = 1;
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#64748B";
+      ctx.textAlign = "right";
+
+      const gridLines = 4;
+      for (let i = 0; i <= gridLines; i++) {
+        const yFrac = i / gridLines;
+        const yVal = Math.round(minVal + (maxVal - minVal) * (1 - yFrac));
+        const yPos = padT + yFrac * drawH;
+        ctx.beginPath();
+        ctx.moveTo(padL, yPos);
+        ctx.lineTo(viewW - padR, yPos);
+        ctx.stroke();
+        ctx.fillText(yVal.toLocaleString(), padL - 8, yPos + 3);
+      }
+
+      // Compute coordinate points
+      const coords = pts.map((p, i) => {
+        const x = padL + (i / (pts.length - 1)) * drawW;
+        const norm = (p.online - minVal) / (maxVal - minVal || 1);
+        const y = padT + (1 - norm) * drawH;
+        return { x, y, p };
+      });
+
+      // Fill Gradient Area
+      const grad = ctx.createLinearGradient(0, padT, 0, padT + drawH);
+      grad.addColorStop(0, "rgba(6, 182, 212, 0.35)");
+      grad.addColorStop(0.5, "rgba(147, 51, 234, 0.15)");
+      grad.addColorStop(1, "rgba(147, 51, 234, 0.0)");
+
+      ctx.beginPath();
+      coords.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else {
+          const prev = coords[i - 1];
+          const cx = (prev.x + pt.x) / 2;
+          ctx.bezierCurveTo(cx, prev.y, cx, pt.y, pt.x, pt.y);
+        }
+      });
+      ctx.lineTo(coords[coords.length - 1].x, padT + drawH);
+      ctx.lineTo(coords[0].x, padT + drawH);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Stroke Line
+      ctx.beginPath();
+      coords.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else {
+          const prev = coords[i - 1];
+          const cx = (prev.x + pt.x) / 2;
+          ctx.bezierCurveTo(cx, prev.y, cx, pt.y, pt.x, pt.y);
+        }
+      });
+      ctx.strokeStyle = "#06B6D4";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "rgba(6, 182, 212, 0.6)";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Draw dots
+      coords.forEach((pt, i) => {
+        const isLast = i === coords.length - 1;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, isLast ? 5 : 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = isLast ? "#34D399" : "#06B6D4";
+        ctx.fill();
+        if (isLast) {
+          ctx.strokeStyle = "#FFFFFF";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      });
+    }
+
+    function clearChartHistory() {
+      liveMonitoring.history = [];
+      renderLiveChart();
+      showToast("График очищен. Начинается новый сбор точек.");
+    }
+
+    function setRtInterval(ms) {
+      liveMonitoring.intervalMs = ms;
+      document.querySelectorAll(".rt-interval-selector .rt-chip").forEach(b => {
+        b.classList.toggle("active", parseInt(b.dataset.ms) === ms);
+      });
+      showToast(`Интервал опроса: ${ms / 1000} сек`);
+      startRtLoop();
+    }
+
+    function toggleRtMonitoring() {
+      liveMonitoring.active = !liveMonitoring.active;
+      const btn = document.getElementById("rtPauseBtn");
+      const icon = document.getElementById("rtPauseIcon");
+      const text = document.getElementById("rtPauseText");
+      const badge = document.getElementById("rtStatusLabel");
+
+      if (liveMonitoring.active) {
+        icon.textContent = "⏸";
+        text.textContent = "Пауза";
+        badge.textContent = "АКТИВЕН";
+        badge.style.color = "#10B981";
+        startRtLoop();
+        showToast("▶ Мониторинг в реальном времени возобновлен");
+      } else {
+        icon.textContent = "▶";
+        text.textContent = "Возобновить";
+        badge.textContent = "НА ПАУЗЕ";
+        badge.style.color = "#F59E0B";
+        if (liveMonitoring.timerId) clearInterval(liveMonitoring.timerId);
+        showToast("⏸ Мониторинг временно приостановлен");
+      }
+    }
+
+    function triggerImmediatePing() {
+      showToast("⚡ Внеочередной опрос сокета...");
+      pollServerLive(liveMonitoring.targetServer);
+    }
+
+    function toggleRtSound() {
+      liveMonitoring.soundEnabled = !liveMonitoring.soundEnabled;
+      const icon = document.getElementById("rtSoundIcon");
+      const text = document.getElementById("rtSoundText");
+      if (liveMonitoring.soundEnabled) {
+        icon.textContent = "🔊";
+        text.textContent = "ВКЛ";
+        playTone(660, 0.15);
+        showToast("🔊 Звуковые оповещения включены");
+      } else {
+        icon.textContent = "🔇";
+        text.textContent = "ВЫКЛ";
+        showToast("🔇 Звук выключен");
+      }
+    }
+
+    function playTone(freq = 600, duration = 0.1, type = 'sine') {
+      if (!liveMonitoring.soundEnabled) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.04, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch {}
+    }
+
+    async function syncHomeContentWithCloudflare() {
+      const featured = appData.servers.find(s => s.isFeatured);
+      const payload = {
+        serverEnabled: !!featured,
+        featuredServer: featured ? {
+          name: featured.name || featured.ip,
+          ip: featured.ip,
+          desc: featured.desc || "Официальный сервер"
+        } : null,
+        news: appData.news || [],
+        updateNotice: appData.updateNotice || { available: false }
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/v1/content/home`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          if (!featured) {
+            showToast("✔ Блок сервера скрыт в лаунчере и удалён из базы API");
+          } else {
+            showToast(`★ Сервер ${featured.ip} обновлен в лаунчере через Cloudflare API!`);
+          }
+        }
+      } catch (err) {
+        console.error("Sync error", err);
+      }
+    }
+
+    async function setFocusedAsFeatured() {
+      const ip = liveMonitoring.targetServer;
+      const srv = appData.servers.find(s => s.ip === ip);
+      if (!srv) return;
+
+      appData.servers.forEach(s => s.isFeatured = (s.ip === ip));
+      saveData(appData);
+      renderServerPills();
+      renderServers();
+      syncHomeContentWithCloudflare();
+    }
+
+    function copyFocusedIp() {
+      navigator.clipboard.writeText(liveMonitoring.targetServer);
+      showToast(`📋 IP скопирован: ${liveMonitoring.targetServer}`);
+    }
+
+    async function pingAllMonitoredServers() {
+      showToast("Опрашиваю все серверы...");
+      for (let i = 0; i < appData.servers.length; i++) {
+        const srv = appData.servers[i];
+        try {
+          const res = await fetch(`https://api.mcsrvstat.us/3/${encodeURIComponent(srv.ip)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.online) {
+              srv.online = data.players?.online || 0;
+              srv.max = data.players?.max || 500;
+              srv.status = "online";
+              srv.version = data.version;
+            } else {
+              srv.online = 0;
+              srv.status = "none";
+            }
+          }
+        } catch {}
+      }
+      saveData(appData);
+      renderServerPills();
+      renderServers();
+    }
+
+    function saveServer() {
+      const ip = document.getElementById("srvIpInput").value.trim();
+      const name = document.getElementById("srvNameInput").value.trim() || ip;
+      const desc = document.getElementById("srvDescInput").value.trim() || "Официальный сервер KS Network";
+      const isFeatured = document.getElementById("srvFeaturedCheck").checked;
+
+      if (!ip) { alert("Укажите IP адрес сервера!"); return; }
+
+      if (isFeatured) {
+        appData.servers.forEach(s => s.isFeatured = false);
+      }
+
+      appData.servers.unshift({
+        id: "srv-" + Date.now(),
+        name,
+        ip,
+        desc,
+        online: 0,
+        max: 500,
+        status: "none",
+        ping: "18 ms",
+        isFeatured
+      });
+
+      saveData(appData);
+      setFocusedServer(ip);
+      pingAllMonitoredServers();
+      syncHomeContentWithCloudflare();
+    }
+
+    function renderServers() {
+      const container = document.getElementById("serversList");
+      const countEl = document.getElementById("srvCount");
+      if (!container) return;
+      container.innerHTML = "";
+      if (countEl) countEl.textContent = appData.servers.length;
+
+      appData.servers.forEach((srv, index) => {
+        let statusBadge = "";
+        if (srv.status === "online") {
+          statusBadge = `<span style="font-size:11px;color:#10B981;font-weight:700;">● В сети (${srv.online} / ${srv.max} игроков)</span>`;
+        } else {
+          statusBadge = `<span style="font-size:11px;color:#94A3B8;font-weight:700;">● Пока что никто не играет (0 онлайн)</span>`;
+        }
+
+        const card = document.createElement("div");
+        card.className = "item-card";
+        card.innerHTML = `
+          <div class="item-top">
+            ${statusBadge}
+            ${srv.isFeatured ? '<span style="font-size:11px;font-weight:700;color:var(--cyan);">★ Главный на витрине</span>' : ''}
+          </div>
+          <div style="font-weight:800;font-size:16px;color:#FFF;margin-bottom:2px;">${escapeHtml(srv.name)}</div>
+          <div style="font-size:13px;color:var(--cyan);font-family:monospace;margin-bottom:6px;">${escapeHtml(srv.ip)}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">${escapeHtml(srv.desc)}</div>
+          
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="setFocusedServer('${escapeHtml(srv.ip)}')">🎯 Фокус</button>
+            <button class="btn btn-secondary btn-sm" onclick="pingSingleServer(${index})">⚡ Пинг</button>
+            <button class="btn btn-secondary btn-sm" onclick="setFeaturedServer(${index})">${srv.isFeatured ? '★ Витрина' : 'Сделать витриной'}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteServer(${index})">Удалить</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function pingSingleServer(index) {
+      const srv = appData.servers[index];
+      showToast(`Пингую ${srv.ip}...`);
+      try {
+        const res = await fetch(`https://api.mcsrvstat.us/3/${encodeURIComponent(srv.ip)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.online) {
+            srv.online = data.players?.online || 0;
+            srv.max = data.players?.max || 500;
+            srv.status = "online";
+            showToast(`Сервер ${srv.ip} онлайн: ${srv.online} игроков!`);
+          } else {
+            srv.online = 0;
+            srv.status = "none";
+            showToast(`Сервер ${srv.ip} офлайн`);
+          }
+          saveData(appData);
+          renderServerPills();
+        }
+      } catch {
+        showToast("Ошибка соединения с сервером");
+      }
+    }
+
+    function setFeaturedServer(index) {
+      appData.servers.forEach((s, i) => s.isFeatured = (i === index));
+      saveData(appData);
+      renderServerPills();
+      renderServers();
+      syncHomeContentWithCloudflare();
+    }
+
+    function deleteServer(index) {
+      const srv = appData.servers[index];
+      if (!srv) return;
+      if (confirm(`Удалить сервер "${srv.name || srv.ip}" из мониторинга и лаунчера?`)) {
+        appData.servers.splice(index, 1);
+        saveData(appData);
+        renderServerPills();
+        renderServers();
+        syncHomeContentWithCloudflare();
+      }
+    }
+
+
+    // --- НОВОСТИ ---
+    function renderNews() {
+      const container = document.getElementById("newsList");
+      const countEl = document.getElementById("newsCount");
+      container.innerHTML = "";
+      countEl.textContent = appData.news.length;
+
+      appData.news.forEach((item, index) => {
+        const card = document.createElement("div");
+        card.className = "item-card";
+        card.innerHTML = `
+          <div class="item-top">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="badge-tag ${item.isFeatured ? 'badge-hero' : 'badge-update'}">${escapeHtml(item.badge)}</span>
+              ${item.isFeatured ? '<span style="font-size:11px;font-weight:700;color:var(--emerald);">★ На главной</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:var(--text-dim);">${item.date}</div>
+          </div>
+          <div style="font-weight:700;font-size:16px;color:#FFF;margin-bottom:4px;">${escapeHtml(item.title)}</div>
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">${escapeHtml(item.desc)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+            ${(item.tags || []).map(t => `<span style="font-size:11px;background:#182035;border:1px solid #283556;padding:2px 8px;border-radius:6px;color:#E2E8F0;">${escapeHtml(t)}</span>`).join('')}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="setFeaturedNews(${index})">${item.isFeatured ? '★ Главная' : 'Сделать главной'}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteNews(${index})">Удалить</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function addNews() {
+      const title = document.getElementById("newsTitleInput").value.trim();
+      const badge = document.getElementById("newsBadgeSelect").value;
+      const desc = document.getElementById("newsDescInput").value.trim();
+      const tagsStr = document.getElementById("newsTagsInput").value.trim();
+      const isFeatured = document.getElementById("newsPinCheck").checked;
+
+      if (!title) { alert("Пожалуйста, укажите заголовок новости!"); return; }
+
+      const tags = tagsStr ? tagsStr.split(",").map(s => s.trim()).filter(Boolean) : ["KS Launcher", "Minecraft"];
+
+      if (isFeatured) {
+        appData.news.forEach(n => n.isFeatured = false);
+      }
+
+      appData.news.unshift({
+        id: "news-" + Date.now(),
+        title,
+        badge,
+        desc: desc || "Без описания",
+        tags,
+        date: new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }),
+        isFeatured
+      });
+
+      saveData(appData);
+
+      document.getElementById("newsTitleInput").value = "";
+      document.getElementById("newsDescInput").value = "";
+      document.getElementById("newsTagsInput").value = "";
+    }
+
+    function setFeaturedNews(index) {
+      appData.news.forEach((n, i) => n.isFeatured = (i === index));
+      saveData(appData);
+    }
+
+    function deleteNews(index) {
+      if (confirm("Вы уверены, что хотите удалить эту новость?")) {
+        appData.news.splice(index, 1);
+        saveData(appData);
+      }
+    }
+
+    // --- НАСТРОЙКИ ---
+    function changeAdminPassword() {
+      const cur = document.getElementById("curPassInput").value.trim();
+      const next = document.getElementById("newPassInput").value.trim();
+      if (cur !== appData.adminPass) { alert("Текущий пароль указан неверно!"); return; }
+      if (next.length < 6) { alert("Новый пароль должен содержать минимум 6 символов!"); return; }
+      appData.adminPass = next;
+      saveData(appData);
+      alert("Пароль администратора успешно изменён! Запомните его.");
+      document.getElementById("curPassInput").value = "";
+      document.getElementById("newPassInput").value = "";
+    }
+
+    function exportData() {
+      const blob = new Blob([JSON.stringify(appData, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `kslauncher-admin-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      showToast("Бэкап успешно скачан!");
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed && parsed.news && parsed.servers) {
+            appData = parsed;
+            saveData(appData);
+            alert("Данные успешно импортированы!");
+          } else {
+            alert("Неверный формат файла бэкапа!");
+          }
+        } catch (err) {
+          alert("Ошибка чтения JSON: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function resetDefaultData() {
+      if (confirm("Вы точно хотите сбросить все новости и сервера к стандартным?")) {
+        appData = JSON.parse(JSON.stringify(DEFAULT_DATA));
+        saveData(appData);
+      }
+    }
+
+    function renderAll() {
+      renderNews();
+      renderServers();
+      try { initRealtimeMonitoring(); } catch (e) { console.error("initRealtimeMonitoring error", e); }
+    }
+
+    function showToast(text) {
+      const t = document.getElementById("toast");
+      t.textContent = text;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2800);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    checkAuth();
+  </script>
+</body>
+</html>

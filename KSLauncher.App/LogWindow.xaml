@@ -1,27 +1,68 @@
 <Window x:Class="KSLauncher.App.LogWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Консоль логов Minecraft — KS Launcher" Height="500" Width="800" MinHeight="350" MinWidth="500"
+        Title="Консоль логов Minecraft — KS Launcher" Height="520" Width="820" MinHeight="360" MinWidth="520"
         WindowStartupLocation="CenterOwner" Background="#0C1210" Foreground="#F4F7F5"
-        FontFamily="Consolas" WindowStyle="ToolWindow">
-  <Grid Margin="14">
+        FontFamily="Segoe UI">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Accent" Color="#9333EA"/>
+    <SolidColorBrush x:Key="SurfaceBorder" Color="#26372D"/>
+  </Window.Resources>
+  <Grid Margin="16">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="*"/>
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-    <DockPanel Grid.Row="0" Margin="0,0,0,10" LastChildFill="False">
-      <TextBlock Text="Консоль вывода Minecraft (stdout / stderr)" FontSize="14" FontWeight="Bold" Foreground="#A6F36B" VerticalAlignment="Center"/>
-      <Button Content="📋  Скопировать всё" Padding="12,6" Margin="10,0,0,0" DockPanel.Dock="Right" Click="CopyLogs_Click"/>
-      <Button Content="🧹  Очистить" Padding="12,6" DockPanel.Dock="Right" Click="ClearLogs_Click"/>
+    <DockPanel Grid.Row="0" Margin="0,0,0,12" LastChildFill="False">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource Accent}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+        <TextBlock Text="Консоль вывода Minecraft (stdout / stderr)" FontSize="15" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+      </StackPanel>
+
+      <Button Content="📋  Скопировать всё" Padding="14,7" Margin="10,0,0,0" FontSize="13" FontWeight="SemiBold"
+              Background="#18221F" Foreground="#F4F7F5" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" 
+              Cursor="Hand" DockPanel.Dock="Right" Click="CopyLogs_Click">
+        <Button.Template>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#25352C"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Button.Template>
+      </Button>
+
+      <Button Content="🧹  Очистить" Padding="14,7" FontSize="13" FontWeight="SemiBold"
+              Background="#18221F" Foreground="#F4F7F5" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" 
+              Cursor="Hand" DockPanel.Dock="Right" Click="ClearLogs_Click">
+        <Button.Template>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#25352C"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Button.Template>
+      </Button>
     </DockPanel>
 
-    <TextBox x:Name="LogTextBox" Grid.Row="1" Background="#080C0B" Foreground="#D5E8DF" BorderBrush="#26372D" BorderThickness="1"
-             Padding="10" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-             FontFamily="Consolas" FontSize="12"/>
+    <Border Grid.Row="1" Background="#080C0B" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" CornerRadius="10">
+      <TextBox x:Name="LogTextBox" Background="Transparent" Foreground="#D5E8DF" BorderThickness="0"
+               Padding="12" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+               FontFamily="Consolas" FontSize="12.5"/>
+    </Border>
 
-    <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
+    <DockPanel Grid.Row="2" Margin="0,12,0,0" LastChildFill="False">
       <CheckBox x:Name="AutoScrollBox" Content="Автоматическая прокрутка вниз" Foreground="#91A19A" IsChecked="True" VerticalAlignment="Center"/>
       <TextBlock x:Name="LineCountLabel" Text="Строк: 0" Foreground="#91A19A" FontSize="12" DockPanel.Dock="Right" VerticalAlignment="Center"/>
     </DockPanel>

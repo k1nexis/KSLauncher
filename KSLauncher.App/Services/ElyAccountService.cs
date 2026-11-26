@@ -24,7 +24,7 @@ public sealed class ElyAccountService
         {
             var port = ((IPEndPoint)listener.LocalEndpoint).Port;
             var returnUri = $"http://127.0.0.1:{port}/ely/callback";
-            var startUrl = new Uri(worker, $"v1/ely/start?return_uri={Uri.EscapeDataString(returnUri)}");
+            var startUrl = new Uri(worker, $"v1/ely/start?return_uri={Uri.EscapeDataString(returnUri)}&prompt=select_account");
             using var startResponse = await Client.GetAsync(startUrl, cancellationToken);
             var startBody = await startResponse.Content.ReadAsStringAsync(cancellationToken);
             if (!startResponse.IsSuccessStatusCode) throw new InvalidOperationException(ReadError(startBody, $"Worker вернул HTTP {(int)startResponse.StatusCode}."));
@@ -34,7 +34,13 @@ public sealed class ElyAccountService
             if (!Uri.TryCreate(authorizationUrl, UriKind.Absolute, out var authUri) || authUri.Host != "account.ely.by" || string.IsNullOrWhiteSpace(expectedState))
                 throw new InvalidOperationException("Worker вернул некорректный адрес Ely.by.");
 
-            Process.Start(new ProcessStartInfo(authUri.AbsoluteUri) { UseShellExecute = true });
+            var finalAuthUrl = authUri.AbsoluteUri;
+            if (!finalAuthUrl.Contains("prompt="))
+            {
+                finalAuthUrl += (finalAuthUrl.Contains('?') ? "&" : "?") + "prompt=select_account";
+            }
+
+            Process.Start(new ProcessStartInfo(finalAuthUrl) { UseShellExecute = true });
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromMinutes(4));
             using var client = await listener.AcceptTcpClientAsync(timeout.Token);

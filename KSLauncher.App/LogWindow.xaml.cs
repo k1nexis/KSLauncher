@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 using KSLauncher.App.Services;
 
 namespace KSLauncher.App;
@@ -11,9 +12,21 @@ public partial class LogWindow : Window
     {
         InitializeComponent();
         _logs = logs;
+        Loaded += OnLoaded;
         RefreshText();
         _logs.MessageReceived += OnMessageReceived;
         Closed += (_, _) => _logs.MessageReceived -= OnMessageReceived;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (Owner is MainWindow mw)
+        {
+            if (mw.Resources["Accent"] is Brush accent)
+                Resources["Accent"] = accent;
+            if (mw.Resources["SurfaceBorder"] is Brush border)
+                Resources["SurfaceBorder"] = border;
+        }
     }
 
     private void RefreshText()
@@ -45,7 +58,7 @@ public partial class LogWindow : Window
     private void CopyLogs_Click(object sender, RoutedEventArgs e)
     {
         Clipboard.SetText(LogTextBox.Text);
-        MessageBox.Show(this, "Логи скопированы в буфер обмена.", "Консоль логов", MessageBoxButton.OK, MessageBoxImage.Information);
+        ConfirmDialog.ShowSuccess(this, "Консоль логов", "Логи Minecraft успешно скопированы в буфер обмена.");
     }
 
     private void ClearLogs_Click(object sender, RoutedEventArgs e)

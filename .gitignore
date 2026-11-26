@@ -3,6 +3,11 @@
 **/obj/
 cloudflare/node_modules/
 cloudflare/.wrangler/
+.wrangler/
 cloudflare/.dev.vars
+scratch_*
+live_script.js
+live_test.html
+extracted_installer_assoc.png
 *.user
 *.suo

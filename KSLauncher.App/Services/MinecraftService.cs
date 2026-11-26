@@ -11,18 +11,28 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text.Json;
 
 namespace KSLauncher.App.Services;
 
 public sealed class MinecraftService
 {
-    public string InstancesRoot { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KSLauncher", "instances");
-    public InstanceManager Instances { get; }
+    public string InstancesRoot { get; private set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KSLauncher", "instances");
+    public InstanceManager Instances { get; private set; }
     public JavaService Java { get; } = new();
     public GameLogService Logs { get; } = new();
 
-    public MinecraftService()
+    public MinecraftService(string? customInstancesRoot = null)
     {
+        SetInstancesRoot(customInstancesRoot);
+        Instances ??= new InstanceManager(InstancesRoot);
+    }
+
+    public void SetInstancesRoot(string? customInstancesRoot)
+    {
+        InstancesRoot = !string.IsNullOrWhiteSpace(customInstancesRoot)
+            ? customInstancesRoot
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KSLauncher", "instances");
         Directory.CreateDirectory(InstancesRoot);
         Instances = new InstanceManager(InstancesRoot);
     }
@@ -39,7 +49,10 @@ public sealed class MinecraftService
         string? customInstanceRoot = null,
         string? gameLanguage = null,
         string? javaPath = null,
-        Action<int>? onProcessExited = null)
+        Action<int>? onProcessExited = null,
+        Action<string, double>? onDownloadProgress = null,
+        string? serverIp = null,
+        int serverPort = 25565)
     {
         var root = !string.IsNullOrWhiteSpace(customInstanceRoot) && Directory.Exists(customInstanceRoot)
             ? customInstanceRoot
@@ -49,13 +62,45 @@ public sealed class MinecraftService
         ConfigureLanguage(root, gameLanguage);
 
         var path = new MinecraftPath(root);
-        var launcher = new MinecraftLauncher(path);
+        var parameters = MinecraftLauncherParameters.CreateDefault(path);
+        var launcher = new MinecraftLauncher(parameters);
+
+        launcher.FileProgressChanged += (sender, args) =>
+        {
+            if (args.TotalTasks > 0)
+            {
+                var percent = (double)args.ProgressedTasks / args.TotalTasks * 100.0;
+                onDownloadProgress?.Invoke($"Загрузка файлов ({args.ProgressedTasks}/{args.TotalTasks}): {args.Name}", percent);
+            }
+        };
+
+        launcher.ByteProgressChanged += (sender, args) =>
+        {
+            if (args.TotalBytes > 0)
+            {
+                var percent = (double)args.ProgressedBytes / args.TotalBytes * 100.0;
+                var mbDone = args.ProgressedBytes / (1024.0 * 1024.0);
+                var mbTotal = args.TotalBytes / (1024.0 * 1024.0);
+                onDownloadProgress?.Invoke($"Скачивание файлов игры: {mbDone:F1} / {mbTotal:F1} МБ ({percent:F0}%)", percent);
+            }
+        };
+
         var launchVersion = await InstallLoaderAsync(version, loader, path, launcher);
 
         var jvmArguments = new List<MArgument>();
-        if (!string.IsNullOrWhiteSpace(authlibInjectorPath)) jvmArguments.Add(new MArgument($"-javaagent:{authlibInjectorPath}=ely.by"));
-        jvmArguments.Add(new MArgument("-XX:+UseG1GC"));
-        if (stringDeduplication) jvmArguments.Add(new MArgument("-XX:+UseStringDeduplication"));
+        if (!string.IsNullOrWhiteSpace(authlibInjectorPath))
+        {
+            jvmArguments.Add(new MArgument($"-javaagent:{authlibInjectorPath}=ely.by"));
+        }
+
+        // Подключаем оптимизированный набор аргументов JVM:
+        // - Задействование ВСЕХ ядер и потоков процессора
+        // - AlwaysPreTouch для исключения лагов при создании мира
+        // - Тюнинг G1GC с минимальными задержками (MaxGCPauseMillis=35) для плавной генерации и прогрузки чанков
+        foreach (var opt in JvmTuning.GetOptimizedJvmArguments(stringDeduplication))
+        {
+            jvmArguments.Add(new MArgument(opt));
+        }
 
         var options = new MLaunchOption
         {
@@ -64,7 +109,9 @@ public sealed class MinecraftService
             MinimumRamMb = Math.Min(1024, ramMb),
             GameLauncherName = "KSLauncher",
             GameLauncherVersion = "0.2.0",
-            ExtraJvmArguments = jvmArguments
+            ExtraJvmArguments = jvmArguments,
+            ServerIp = string.IsNullOrWhiteSpace(serverIp) ? null : serverIp.Trim(),
+            ServerPort = serverPort > 0 ? serverPort : 25565
         };
 
         if (!string.IsNullOrWhiteSpace(javaPath) && File.Exists(javaPath))
@@ -75,6 +122,8 @@ public sealed class MinecraftService
         Logs.Clear();
         Logs.Append($"Подготовка запуска {version} ({loader})...");
         Logs.Append($"Каталог инстанса: {root}");
+        Logs.Append($"Ядер CPU задействовано: {Environment.ProcessorCount} (все активны)");
+        Logs.Append($"Оптимизация чанков и создания мира (G1GC + AlwaysPreTouch): ВКЛЮЧЕНА");
         if (!string.IsNullOrWhiteSpace(javaPath)) Logs.Append($"Используется Java: {javaPath}");
 
         var process = await launcher.InstallAndBuildProcessAsync(launchVersion, options);
@@ -170,8 +219,44 @@ public sealed class MinecraftService
         var launchVersion = await InstallLoaderAsync(version, loader, path, launcher);
         await launcher.InstallAsync(launchVersion);
 
+        string additionalModAdded = "";
+        if (loader.Equals("fabric", StringComparison.OrdinalIgnoreCase) && Directory.Exists(modsFolder))
+        {
+            var hasFabricApi = Directory.GetFiles(modsFolder, "fabric-api*.jar").Any();
+            if (!hasFabricApi)
+            {
+                onProgress?.Invoke("Добавление обязательного мода Fabric API...");
+                try
+                {
+                    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("KSLauncher/0.2.0");
+                    var searchUrl = $"https://api.modrinth.com/v2/project/fabric-api/version?game_versions=[\"{version}\"]&loaders=[\"fabric\"]";
+                    var jsonStr = await http.GetStringAsync(searchUrl);
+                    using var doc = JsonDocument.Parse(jsonStr);
+                    if (doc.RootElement.GetArrayLength() > 0)
+                    {
+                        var firstVer = doc.RootElement[0];
+                        var files = firstVer.GetProperty("files");
+                        if (files.GetArrayLength() > 0)
+                        {
+                            var fileObj = files[0];
+                            var downloadUrl = fileObj.GetProperty("url").GetString();
+                            var filename = fileObj.GetProperty("filename").GetString();
+                            if (!string.IsNullOrEmpty(downloadUrl) && !string.IsNullOrEmpty(filename))
+                            {
+                                var bytes = await http.GetByteArrayAsync(downloadUrl);
+                                await File.WriteAllBytesAsync(Path.Combine(modsFolder, filename), bytes);
+                                additionalModAdded = $"\n• Автоматически добавлен необходимый мод: {filename}";
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+
         onProgress?.Invoke("Сборка успешно починена!");
-        return $"Сборка починена успешно!\n• Очищено временных файлов: {deletedTempCount}\n• Проверены моды (исправлено/удалено битых: {repairedModsCount})\n• Загрузчик {loader} и библиотеки игры полностью переустановлены.";
+        return $"Сборка починена успешно!\n• Очищено временных файлов: {deletedTempCount}\n• Проверены моды (исправлено/удалено битых: {repairedModsCount})\n• Загрузчик {loader} и библиотеки игры полностью переустановлены.{additionalModAdded}";
     }
 
     private static void ConfigureLanguage(string instanceRoot, string? language)

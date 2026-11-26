@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Windows;
 
 namespace KSLauncher.App.Services;
 
@@ -11,8 +12,12 @@ public sealed record GameInstanceInfo(
     string FolderPath,
     int ModsCount,
     bool IsInstalled,
-    DateTime LastPlayed
-);
+    DateTime LastPlayed,
+    bool HasModError = false
+)
+{
+    public Visibility RepairVisibility => HasModError ? Visibility.Visible : Visibility.Collapsed;
+}
 
 public sealed class InstanceMetadata
 {
@@ -88,6 +93,43 @@ public sealed class InstanceManager
 
             var isInstalled = Directory.Exists(Path.Combine(dir, "versions")) || Directory.Exists(modsDir) || File.Exists(Path.Combine(dir, "options.txt"));
 
+            bool hasModError = false;
+            var crashReportsDir = Path.Combine(dir, "crash-reports");
+            if (Directory.Exists(crashReportsDir))
+            {
+                var crashFiles = Directory.GetFiles(crashReportsDir, "crash-*.txt");
+                if (crashFiles.Length > 0)
+                {
+                    hasModError = true;
+                }
+            }
+            if (!hasModError)
+            {
+                var latestLog = Path.Combine(dir, "logs", "latest.log");
+                if (File.Exists(latestLog))
+                {
+                    try
+                    {
+                        using var fs = new FileStream(latestLog, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        var len = fs.Length;
+                        var offset = Math.Max(0, len - 32768);
+                        fs.Seek(offset, SeekOrigin.Begin);
+                        using var reader = new StreamReader(fs);
+                        var tail = reader.ReadToEnd();
+                        if (tail.Contains("net.fabricmc.loader") ||
+                            tail.Contains("ModResolutionException") ||
+                            tail.Contains("Incompatible mods") ||
+                            tail.Contains("Missing or unsupported mandatory dependencies") ||
+                            tail.Contains("DuplicateModsException") ||
+                            tail.Contains("A critical error occurred"))
+                        {
+                            hasModError = true;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
             list.Add(new GameInstanceInfo(
                 Id: dirName,
                 Name: name,
@@ -96,7 +138,8 @@ public sealed class InstanceManager
                 FolderPath: dir,
                 ModsCount: modsCount,
                 IsInstalled: isInstalled,
-                LastPlayed: lastPlayed
+                LastPlayed: lastPlayed,
+                HasModError: hasModError
             ));
         }
 
@@ -144,6 +187,36 @@ public sealed class InstanceManager
             IsInstalled: true,
             LastPlayed: meta.LastPlayed
         );
+    }
+
+    public void UpdateInstanceName(string instancePath, string newName)
+    {
+        var metaFile = Path.Combine(instancePath, "instance.json");
+        if (File.Exists(metaFile))
+        {
+            try
+            {
+                var meta = JsonSerializer.Deserialize<InstanceMetadata>(File.ReadAllText(metaFile));
+                if (meta != null)
+                {
+                    meta.Name = newName.Trim();
+                    File.WriteAllText(metaFile, JsonSerializer.Serialize(meta, JsonOptions));
+                }
+            }
+            catch { }
+        }
+        else
+        {
+            var dirName = Path.GetFileName(instancePath);
+            var meta = new InstanceMetadata
+            {
+                Id = dirName,
+                Name = newName.Trim(),
+                CreatedAt = DateTime.UtcNow,
+                LastPlayed = DateTime.UtcNow
+            };
+            File.WriteAllText(metaFile, JsonSerializer.Serialize(meta, JsonOptions));
+        }
     }
 
     public void TouchInstance(string instancePath)

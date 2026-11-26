@@ -28,7 +28,8 @@ public sealed class ModrinthService
         var facets = new List<string[]> { new[] { $"project_type:{projectType}" } };
         if (projectType == "mod" && loader is not ("Any" or "vanilla")) facets.Add(new[] { $"categories:{loader.ToLowerInvariant()}" });
         if (!string.IsNullOrWhiteSpace(gameVersion)) facets.Add(new[] { $"versions:{gameVersion}" });
-        var url = $"search?query={Uri.EscapeDataString(query)}&facets={Uri.EscapeDataString(JsonSerializer.Serialize(facets))}&limit=30&index=relevance";
+        var sortIndex = string.IsNullOrWhiteSpace(query) ? "downloads" : "relevance";
+        var url = $"search?query={Uri.EscapeDataString(query)}&facets={Uri.EscapeDataString(JsonSerializer.Serialize(facets))}&limit=30&index={sortIndex}";
         using var response = await Client.GetAsync(url, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var json = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(cancellationToken));
@@ -45,7 +46,9 @@ public sealed class ModrinthService
         if (projectType == "mod" && loader is "Vanilla" or "Any")
             throw new InvalidOperationException("Для модов выберите Fabric, Forge, NeoForge или Quilt. Сначала установите профиль с этим загрузчиком.");
 
-        var instance = Path.Combine(instancesRoot, SafeSegment($"{gameVersion}-{loader.ToLowerInvariant()}"));
+        var instance = (File.Exists(Path.Combine(instancesRoot, "instance.json")) || Directory.Exists(Path.Combine(instancesRoot, "mods")))
+            ? instancesRoot
+            : Path.Combine(instancesRoot, SafeSegment($"{gameVersion}-{loader.ToLowerInvariant()}"));
         var folder = projectType switch
         {
             "mod" => "mods", "resourcepack" => "resourcepacks", "shader" => "shaderpacks", _ => "modpacks"

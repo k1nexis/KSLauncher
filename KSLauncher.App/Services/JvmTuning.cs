@@ -12,5 +12,46 @@ public static class JvmTuning
         }
     }
 
-    public static string HardwareSummary => $"{Environment.ProcessorCount} логических потоков";
+    public static string HardwareSummary => $"{Environment.ProcessorCount} логических потоков CPU (все ядра активны)";
+
+    /// <summary>
+    /// Оптимизированные аргументы JVM для использования всех ядер процессора, 
+    /// быстрой прогрузки чанков и мгновенной генерации мира без фризов.
+    /// </summary>
+    public static List<string> GetOptimizedJvmArguments(bool stringDeduplication)
+    {
+        int cores = Environment.ProcessorCount;
+        int concThreads = Math.Max(1, cores / 4);
+
+        var args = new List<string>
+        {
+            // 1. Использование всех ядер процессора для игры и фоновой генерации
+            $"-XX:ActiveProcessorCount={cores}",
+            $"-XX:ParallelGCThreads={cores}",
+            $"-XX:ConcGCThreads={concThreads}",
+
+            // 2. Высокопроизводительный G1GC с минимальными задержками (без микрофризов)
+            "-XX:+UnlockExperimentalVMOptions",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=35",
+            "-XX:G1NewSizePercent=30",
+            "-XX:G1MaxNewSizePercent=50",
+            "-XX:G1ReservePercent=15",
+            "-XX:G1HeapRegionSize=32M",
+            "-XX:InitiatingHeapOccupancyPercent=45",
+            "-XX:G1MixedGCCountTarget=4",
+
+            // 3. Быстрое создание мира и прогрузка чанков (AlwaysPreTouch исключает фризы ОС при аллокации памяти)
+            "-XX:+AlwaysPreTouch",
+            "-XX:+OptimizeStringConcat",
+            "-Dsun.rmi.dgc.server.gcInterval=2147483646"
+        };
+
+        if (stringDeduplication)
+        {
+            args.Add("-XX:+UseStringDeduplication");
+        }
+
+        return args;
+    }
 }

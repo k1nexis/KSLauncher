@@ -11,7 +11,16 @@ public sealed record SavedAccount(
     string? AccessToken = null,
     long ExpiresAt = 0,
     bool IsActive = false
-);
+)
+{
+    public string DisplayName => Type.ToLowerInvariant() switch
+    {
+        "ely" => $"{Username}.ely",
+        "ks" => $"{Username}.ks",
+        "microsoft" => $"{Username}.ms",
+        _ => $"{Username}.offline"
+    };
+}
 
 public sealed class AccountManager
 {
@@ -29,7 +38,7 @@ public sealed class AccountManager
         try
         {
             var list = JsonSerializer.Deserialize<List<SavedAccount>>(File.ReadAllText(_filePath));
-            return list ?? new List<SavedAccount>();
+            return (list ?? new List<SavedAccount>()).OrderByDescending(x => x.IsActive).ToList();
         }
         catch { return new List<SavedAccount>(); }
     }
@@ -37,7 +46,7 @@ public sealed class AccountManager
     public void SaveAccount(SavedAccount account)
     {
         var accounts = GetAccounts();
-        accounts.RemoveAll(x => x.Id.Equals(account.Id, StringComparison.OrdinalIgnoreCase) || (x.Username.Equals(account.Username, StringComparison.OrdinalIgnoreCase) && x.Type == account.Type));
+        accounts.RemoveAll(x => x.Id.Equals(account.Id, StringComparison.OrdinalIgnoreCase));
         // Reset other actives if this one is active
         if (account.IsActive)
         {
@@ -47,7 +56,8 @@ public sealed class AccountManager
             }
         }
         accounts.Insert(0, account);
-        Persist(accounts);
+        var sorted = accounts.OrderByDescending(x => x.IsActive).ToList();
+        Persist(sorted);
     }
 
     public void SetActiveAccount(string id)
@@ -57,7 +67,8 @@ public sealed class AccountManager
         {
             accounts[i] = accounts[i] with { IsActive = accounts[i].Id.Equals(id, StringComparison.OrdinalIgnoreCase) };
         }
-        Persist(accounts);
+        var sorted = accounts.OrderByDescending(x => x.IsActive).ToList();
+        Persist(sorted);
     }
 
     public SavedAccount? GetActiveAccount()
@@ -74,7 +85,8 @@ public sealed class AccountManager
         {
             accounts[0] = accounts[0] with { IsActive = true };
         }
-        Persist(accounts);
+        var sorted = accounts.OrderByDescending(x => x.IsActive).ToList();
+        Persist(sorted);
     }
 
     private void Persist(List<SavedAccount> accounts)
