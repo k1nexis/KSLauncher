@@ -68,6 +68,7 @@ public sealed class MinecraftService
         Directory.CreateDirectory(root);
         ConfigureLanguage(root, gameLanguage);
         ConfigureChunkPerformance(root);
+        AutoRemoveIncompatibleMods(root, msg => Logs.Append(msg));
 
         // Shared ASCII path for libraries/versions/assets/runtime — Java fails to load JARs from Cyrillic paths
         var sharedBase = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KSLauncher", "shared");
@@ -457,5 +458,40 @@ public sealed class MinecraftService
             File.WriteAllLines(optionsPath, lines);
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Автоматически удаляет несовместимые или сломанные моды перед запуском.
+    /// Список включает моды с известными проблемами совместимости.
+    /// </summary>
+    private static void AutoRemoveIncompatibleMods(string instanceRoot, Action<string>? log = null)
+    {
+        var modsFolder = Path.Combine(instanceRoot, "mods");
+        if (!Directory.Exists(modsFolder)) return;
+
+        // Список паттернов (glob-like) модов, которые нужно удалить автоматически
+        var incompatiblePatterns = new[]
+        {
+            // VanillaFix — несовместим с Mixin 0.8.5+, вызывает IllegalAccessError: MixinProcessor
+            "VanillaFix-*.jar",
+            // visualclaiming — требует отсутствующий мод Visual Ores (hellfall.visualores)
+            "visualclaiming-*.jar",
+            // topextras — несовместим с установленной версией The One Probe
+            "topextras-*.jar",
+        };
+
+        foreach (var pattern in incompatiblePatterns)
+        {
+            foreach (var file in Directory.GetFiles(modsFolder, pattern))
+            {
+                try
+                {
+                    var name = Path.GetFileName(file);
+                    File.Delete(file);
+                    log?.Invoke($"[Авто-исправление] Удалён несовместимый мод: {name}");
+                }
+                catch { }
+            }
+        }
     }
 }
