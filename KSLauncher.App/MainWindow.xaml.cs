@@ -72,7 +72,7 @@ public partial class MainWindow : Window
     private string? _selectedJavaPath;
     private string _elyWorkerUrl = "https://kslauncher-api.nerck522.workers.dev/";
 
-    private const string CurrentVersion = "0.2.0";
+    private const string CurrentVersion = "0.3.0";
     private const string GitHubReleasesApi = "https://api.github.com/repos/k1nexis/KSLauncher/releases/latest";
 
     private Process? _runningGameProcess;
@@ -184,7 +184,7 @@ public partial class MainWindow : Window
         try
         {
             using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-            client.DefaultRequestHeaders.Add("User-Agent", "KSLauncher/0.2.0");
+            client.DefaultRequestHeaders.Add("User-Agent", "KSLauncher/0.3.0");
             string? serverIp = null;
             string serverName = "KS Network · Выживание";
             string serverDesc = "Официальный сервер KS Network";
@@ -1478,7 +1478,7 @@ del ""%~f0"" >nul 2>&1
         try
         {
             using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("KSLauncher/0.2.0");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("KSLauncher/0.3.0");
 
             foreach (var jar in jars)
             {

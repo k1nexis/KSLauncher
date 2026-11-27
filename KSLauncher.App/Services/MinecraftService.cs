@@ -160,7 +160,7 @@ public sealed class MinecraftService
             MaximumRamMb = ramMb,
             MinimumRamMb = Math.Min(1024, ramMb),
             GameLauncherName = "KSLauncher",
-            GameLauncherVersion = "0.2.0",
+            GameLauncherVersion = "0.3.0",
             ExtraJvmArguments = jvmArguments,
             ServerIp = string.IsNullOrWhiteSpace(serverIp) ? null : serverIp.Trim(),
             ServerPort = serverPort > 0 ? serverPort : 25565
@@ -347,7 +347,7 @@ public sealed class MinecraftService
                 try
                 {
                     using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                    http.DefaultRequestHeaders.UserAgent.ParseAdd("KSLauncher/0.2.0");
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("KSLauncher/0.3.0");
                     var searchUrl = $"https://api.modrinth.com/v2/project/fabric-api/version?game_versions=[\"{version}\"]&loaders=[\"fabric\"]";
                     var jsonStr = await http.GetStringAsync(searchUrl);
                     using var doc = JsonDocument.Parse(jsonStr);
