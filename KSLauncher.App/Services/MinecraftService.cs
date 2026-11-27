@@ -188,16 +188,29 @@ public sealed class MinecraftService
 
     private static async Task<string> InstallForgeAsync(string version, MinecraftLauncher launcher, MinecraftPath path)
     {
+        string? existingVersion = null;
+
         if (Directory.Exists(path.Versions))
         {
-            var existing = Directory.GetDirectories(path.Versions)
+            existingVersion = Directory.GetDirectories(path.Versions)
                 .Select(Path.GetFileName)
                 .FirstOrDefault(d => d != null && d.StartsWith($"{version}-forge", StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrWhiteSpace(existing))
-                return existing;
         }
-        var forge = new ForgeInstaller(launcher);
-        var installedVersion = await forge.Install(version, new ForgeInstallOptions { SkipIfAlreadyInstalled = true });
+
+        string installedVersion;
+        if (!string.IsNullOrWhiteSpace(existingVersion))
+        {
+            // Forge уже установлен — только проверяем/докачиваем библиотеки (launchwrapper и пр.)
+            installedVersion = existingVersion!;
+        }
+        else
+        {
+            // Первый раз — устанавливаем Forge (SkipIfAlreadyInstalled=true предотвращает рекламную страницу)
+            var forge = new ForgeInstaller(launcher);
+            installedVersion = await forge.Install(version, new ForgeInstallOptions { SkipIfAlreadyInstalled = true });
+        }
+
+        // Всегда проверяем и докачиваем недостающие библиотеки (launchwrapper, log4j, и т.д.)
         await launcher.InstallAsync(installedVersion);
         return installedVersion;
     }
