@@ -72,6 +72,9 @@ public partial class MainWindow : Window
     private string? _selectedJavaPath;
     private string _elyWorkerUrl = "https://kslauncher-api.nerck522.workers.dev/";
 
+    private const string CurrentVersion = "0.2.0";
+    private const string GitHubReleasesApi = "https://api.github.com/repos/k1nexis/KSLauncher/releases/latest";
+
     private Process? _runningGameProcess;
     private string? _runningInstancePath;
     private bool _userRequestedStop;
@@ -1044,9 +1047,9 @@ public partial class MainWindow : Window
     {
         CheckUpdateButton.IsEnabled = false;
         UpdateProgressBar.Visibility = Visibility.Visible;
-        UpdateProgressBar.IsIndeterminate = false;
+        UpdateProgressBar.IsIndeterminate = true;
         UpdateProgressBar.Value = 0;
-        UpdateStatusText.Text = "Подключение к серверу обновлений...";
+        UpdateStatusText.Text = "Проверка обновлений...";
 
         try
         {
@@ -1057,17 +1060,52 @@ public partial class MainWindow : Window
                 return;
             }
 
-            UpdateStatusText.Text = "Загружаю обновление лаунчера с сервера...";
-            string[] updateMirrors =
-            [
-                "https://k1nexis.github.io/KSLauncher/KSLauncher.exe",
-                "https://kslauncher.pages.dev/KSLauncher.exe",
-                "https://kslauncher.github.io/KSLauncher.exe"
-            ];
-            var tempExe = Path.Combine(Path.GetTempPath(), $"KSLauncher_new_{Guid.NewGuid():N}.exe");
-
+            // --- Проверяем последнюю версию через GitHub Releases API ---
             using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(3) };
-            http.DefaultRequestHeaders.Add("User-Agent", "KSLauncher/0.2.0");
+            http.DefaultRequestHeaders.Add("User-Agent", "KSLauncher/" + CurrentVersion);
+
+            UpdateStatusText.Text = "Проверка версии на GitHub...";
+            var releaseJson = await http.GetStringAsync(GitHubReleasesApi);
+            using var releaseDoc = JsonDocument.Parse(releaseJson);
+            var tagName = releaseDoc.RootElement.GetProperty("tag_name").GetString() ?? "";
+            var latestVersion = tagName.TrimStart('v');
+
+            if (Version.TryParse(latestVersion, out var latest) &&
+                Version.TryParse(CurrentVersion, out var current) &&
+                latest <= current)
+            {
+                UpdateProgressBar.IsIndeterminate = false;
+                UpdateProgressBar.Value = 100;
+                UpdateStatusText.Text = $"У вас уже установлена последняя версия (v{CurrentVersion}).";
+                ConfirmDialog.ShowSuccess(this, "Обновлений нет",
+                    $"KSLauncher v{CurrentVersion} — это последняя версия.\nОбновление не требуется.");
+                return;
+            }
+
+            UpdateStatusText.Text = $"Доступна версия v{latestVersion}! Начинаю загрузку...";
+
+            // --- Получаем URL скачивания из assets релиза ---
+            string? downloadUrl = null;
+            if (releaseDoc.RootElement.TryGetProperty("assets", out var assets))
+            {
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    var name = asset.TryGetProperty("name", out var n) ? n.GetString() : "";
+                    if (name?.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true &&
+                        name.Contains("Launcher", StringComparison.OrdinalIgnoreCase))
+                    {
+                        downloadUrl = asset.GetProperty("browser_download_url").GetString();
+                        break;
+                    }
+                }
+            }
+
+            // Запасные зеркала
+            string[] updateMirrors = downloadUrl != null
+                ? [downloadUrl, "https://kslauncher.pages.dev/KSLauncher.exe", "https://k1nexis.github.io/KSLauncher/KSLauncher.exe"]
+                : ["https://kslauncher.pages.dev/KSLauncher.exe", "https://k1nexis.github.io/KSLauncher/KSLauncher.exe"];
+
+            var tempExe = Path.Combine(Path.GetTempPath(), $"KSLauncher_new_{Guid.NewGuid():N}.exe");
 
             System.Net.Http.HttpResponseMessage? response = null;
             Exception? lastMirrorError = null;
@@ -1075,26 +1113,21 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    using var connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+                    using var connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                     var candidate = await http.GetAsync(mirrorUrl, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, connectCts.Token);
                     if (candidate.IsSuccessStatusCode)
                     {
                         response = candidate;
-                        UpdateStatusText.Text = $"Скачиваю с зеркала: {new Uri(mirrorUrl).Host}...";
+                        UpdateStatusText.Text = $"Скачиваю v{latestVersion} с {new Uri(mirrorUrl).Host}...";
                         break;
                     }
                     candidate.Dispose();
                 }
-                catch (Exception mirrorEx)
-                {
-                    lastMirrorError = mirrorEx;
-                }
+                catch (Exception mirrorEx) { lastMirrorError = mirrorEx; }
             }
 
             if (response == null)
-            {
-                throw new InvalidOperationException($"Все зеркала обновлений недоступны ({lastMirrorError?.Message ?? "таймаут"}).");
-            }
+                throw new InvalidOperationException($"Все зеркала недоступны ({lastMirrorError?.Message ?? "таймаут"}).");
 
             using var activeResponse = response;
             var totalBytes = activeResponse.Content.Headers.ContentLength ?? -1L;
@@ -1104,6 +1137,7 @@ public partial class MainWindow : Window
             var buffer = new byte[81920];
             long totalRead = 0;
             int bytesRead;
+            UpdateProgressBar.IsIndeterminate = false;
 
             while ((bytesRead = await source.ReadAsync(buffer)) > 0)
             {
@@ -1114,9 +1148,8 @@ public partial class MainWindow : Window
                     var pct = (double)totalRead / totalBytes * 100.0;
                     Dispatcher.Invoke(() =>
                     {
-                        UpdateProgressBar.IsIndeterminate = false;
                         UpdateProgressBar.Value = pct;
-                        UpdateStatusText.Text = $"Загружено {pct:F0}% ({totalRead / (1024.0 * 1024.0):F1} МБ из {totalBytes / (1024.0 * 1024.0):F1} МБ)...";
+                        UpdateStatusText.Text = $"Загружено {pct:F0}% ({totalRead / 1048576.0:F1} МБ из {totalBytes / 1048576.0:F1} МБ)...";
                     });
                 }
                 else
@@ -1124,31 +1157,28 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         UpdateProgressBar.IsIndeterminate = true;
-                        UpdateStatusText.Text = $"Загружено {totalRead / (1024.0 * 1024.0):F1} МБ...";
+                        UpdateStatusText.Text = $"Загружено {totalRead / 1048576.0:F1} МБ...";
                     });
                 }
             }
 
             target.Close();
 
-            var fileInfo = new FileInfo(tempExe);
-            if (fileInfo.Length < 500_000)
-            {
-                throw new InvalidOperationException("Загруженный файл обновления повреждён или неполный.");
-            }
+            if (new FileInfo(tempExe).Length < 500_000)
+                throw new InvalidOperationException("Загруженный файл повреждён или неполный.");
 
             UpdateProgressBar.IsIndeterminate = false;
             UpdateProgressBar.Value = 100;
-            UpdateStatusText.Text = "Обновление успешно скачано!";
+            UpdateStatusText.Text = $"KSLauncher v{latestVersion} скачан! Готов к установке.";
 
-            var answer = ConfirmDialog.Show(this, "Обновление готово",
-                "Новая версия лаунчера успешно загружена!\nЛаунчер сейчас перезапустится для завершения обновления.",
+            var answer = ConfirmDialog.Show(this, $"Обновление до v{latestVersion} готово",
+                $"Новая версия загружена!\nЛаунчер сейчас перезапустится для завершения обновления.",
                 "Обновить и перезапустить", "Отмена");
 
             if (!answer)
             {
                 try { File.Delete(tempExe); } catch { }
-                UpdateStatusText.Text = "Обновление отложено пользователем.";
+                UpdateStatusText.Text = "Обновление отложено.";
                 return;
             }
 
@@ -1169,22 +1199,13 @@ start """" ""{currentExe}""
 del ""%~f0"" >nul 2>&1
 ";
             File.WriteAllText(updaterBat, batScript, new System.Text.UTF8Encoding(false));
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = updaterBat,
-                CreateNoWindow = true,
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-
-            Process.Start(psi);
+            Process.Start(new ProcessStartInfo { FileName = updaterBat, CreateNoWindow = true, UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden });
             Application.Current.Shutdown();
         }
         catch (Exception ex)
         {
             UpdateProgressBar.Visibility = Visibility.Collapsed;
-            UpdateStatusText.Text = $"Ошибка обновления: {ex.Message}";
+            UpdateStatusText.Text = $"Ошибка: {ex.Message}";
             ConfirmDialog.ShowError(this, "Ошибка обновления", $"Не удалось загрузить или применить обновление:\n{ex.Message}");
         }
         finally
@@ -1197,33 +1218,42 @@ del ""%~f0"" >nul 2>&1
     {
         try
         {
-            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            http.DefaultRequestHeaders.Add("User-Agent", "KSLauncher/0.2.0");
-            var res = await http.GetStringAsync(_elyWorkerUrl.TrimEnd('/') + "/v1/content/home");
-            using var doc = JsonDocument.Parse(res);
-            if (doc.RootElement.TryGetProperty("updateNotice", out var noticeEl) && noticeEl.ValueKind == JsonValueKind.Object)
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+            http.DefaultRequestHeaders.Add("User-Agent", "KSLauncher/" + CurrentVersion);
+
+            // Проверяем последний релиз через GitHub Releases API
+            var json = await http.GetStringAsync(GitHubReleasesApi);
+            using var doc = JsonDocument.Parse(json);
+            var tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
+            var latestVersion = tagName.TrimStart('v');
+
+            // Сравниваем версии
+            if (!Version.TryParse(latestVersion, out var latest)) return;
+            if (!Version.TryParse(CurrentVersion, out var current)) return;
+            if (latest <= current) return;
+
+            var releaseNotes = doc.RootElement.TryGetProperty("body", out var bodyEl)
+                ? bodyEl.GetString() ?? ""
+                : "";
+            // Обрезаем release notes до 300 символов
+            if (releaseNotes.Length > 300)
+                releaseNotes = releaseNotes[..300] + "...";
+
+            Dispatcher.Invoke(() =>
             {
-                if (noticeEl.TryGetProperty("available", out var avail) && avail.GetBoolean())
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        var msg = noticeEl.TryGetProperty("message", out var m)
-                            ? m.GetString()
-                            : "Обновление доступно. Нажмите кнопку «Обновить» в настройках.";
+                var msg = $"Доступна новая версия KSLauncher: v{latestVersion}\n" +
+                          $"(установлена: v{CurrentVersion})\n\n" +
+                          (string.IsNullOrWhiteSpace(releaseNotes) ? "" : $"Что нового:\n{releaseNotes}\n\n") +
+                          "Нажмите «Обновить» чтобы установить обновление автоматически.";
 
-                        var answer = ConfirmDialog.Show(this, "Обновление доступно",
-                            $"{msg}\n\nОткрыть настройки сейчас?",
-                            "В настройки", "Позже");
+                var answer = ConfirmDialog.Show(this, "🆕 Доступно обновление",
+                    msg, "Обновить сейчас", "Позже");
 
-                        if (answer)
-                        {
-                            NavigateTo(2);
-                        }
-                    });
-                }
-            }
+                if (answer)
+                    NavigateTo(4); // вкладка Настройки
+            });
         }
-        catch { }
+        catch { /* не мешаем запуску если нет интернета */ }
     }
 
     private void OpenInstanceFolder_Click(object sender, RoutedEventArgs e)
