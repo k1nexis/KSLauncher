@@ -243,9 +243,31 @@ public sealed class MinecraftService
         }
         else
         {
-            // Первый раз — устанавливаем Forge (SkipIfAlreadyInstalled=true предотвращает рекламную страницу)
+            // Forge не найден — устанавливаем. Перехватываем браузер чтобы не открылась реклама.
+            // Запоминаем PID всех браузеров ДО установки, после — убиваем новые браузеры.
+            var browserNames = new[] { "chrome", "firefox", "msedge", "opera", "brave", "iexplore", "safari" };
+            var pidsBefore = System.Diagnostics.Process.GetProcesses()
+                .Where(p => { try { return browserNames.Any(b => p.ProcessName.ToLowerInvariant().Contains(b)); } catch { return false; } })
+                .Select(p => p.Id)
+                .ToHashSet();
+
             var forge = new ForgeInstaller(launcher);
             installedVersion = await forge.Install(version, new ForgeInstallOptions { SkipIfAlreadyInstalled = true });
+
+            // Задержка чтобы браузер успел запуститься, затем убиваем новые процессы браузера (adfocus.us / Opera GX)
+            await Task.Delay(800);
+            foreach (var proc in System.Diagnostics.Process.GetProcesses())
+            {
+                try
+                {
+                    if (!pidsBefore.Contains(proc.Id) &&
+                        browserNames.Any(b => proc.ProcessName.ToLowerInvariant().Contains(b)))
+                    {
+                        proc.Kill(entireProcessTree: true);
+                    }
+                }
+                catch { /* браузер мог уже закрыться */ }
+            }
         }
 
         // Всегда проверяем и докачиваем недостающие библиотеки (launchwrapper, log4j, и т.д.)

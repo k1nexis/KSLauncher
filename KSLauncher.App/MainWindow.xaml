@@ -480,6 +480,7 @@
                         <WrapPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
                           <Button Content="▶   Играть" Background="{DynamicResource Accent}" Foreground="#101512" BorderBrush="{DynamicResource Accent}" Padding="14,9" Margin="0,0,8,0" Click="LaunchLibraryInstance_Click"/>
                           <Button Content="⌘   Моды" Padding="12,9" Margin="0,0,8,0" ToolTip="Добавить моды прямо в эту сборку" Click="OpenInstanceMods_Click"/>
+                          <Button Content="🔄   Обновить все моды" Padding="12,9" Margin="0,0,8,0" ToolTip="Проверить и обновить все моды сборки через Modrinth" Click="UpdateAllMods_Click"/>
                           <Button Content="🔧   Починить сборку" Background="#1C2A22" BorderBrush="#3B5746" Foreground="{DynamicResource Accent}" Padding="14,9" Margin="0,0,8,0" Visibility="{Binding RepairVisibility}" ToolTip="Обнаружена ошибка с модами! Нажмите для анализа лога и восстановления" Click="RepairInstance_Click"/>
                           <Button Content="📁   Папка" Padding="12,9" Margin="0,0,8,0" ToolTip="Открыть папку инстанса в проводнике" Click="OpenInstanceFolder_Click"/>
                           <Button Content="🗑" Padding="10,9" Background="#281717" BorderBrush="#552222" Foreground="#FF8A8A" ToolTip="Удалить сборку" Click="DeleteInstance_Click"/>

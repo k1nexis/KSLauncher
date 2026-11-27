@@ -1423,6 +1423,117 @@ del ""%~f0"" >nul 2>&1
         ModTargetInstanceBox_SelectionChanged(sender, new SelectionChangedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, Array.Empty<object>(), Array.Empty<object>()));
     }
 
+    private async void UpdateAllMods_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not GameInstanceInfo instance) return;
+
+        var modsFolder = System.IO.Path.Combine(instance.FolderPath, "mods");
+        if (!System.IO.Directory.Exists(modsFolder))
+        {
+            ConfirmDialog.ShowSuccess(this, "Нет модов", $"В сборке «{instance.Name}» папка mods пуста или отсутствует.");
+            return;
+        }
+
+        var jars = System.IO.Directory.GetFiles(modsFolder, "*.jar");
+        if (jars.Length == 0)
+        {
+            ConfirmDialog.ShowSuccess(this, "Нет модов", $"В сборке «{instance.Name}» нет .jar файлов модов.");
+            return;
+        }
+
+        StatusText.Text = $"Проверка обновлений модов сборки «{instance.Name}»...";
+        InstallProgress.IsIndeterminate = true;
+
+        int updated = 0, failed = 0, skipped = 0;
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("KSLauncher/0.2.0");
+
+            foreach (var jar in jars)
+            {
+                var fileName = System.IO.Path.GetFileName(jar);
+                StatusText.Text = $"Проверка: {fileName}...";
+
+                try
+                {
+                    // Вычисляем SHA512 хеш JAR для поиска через Modrinth hash lookup API
+                    string sha512;
+                    using (var sha = System.Security.Cryptography.SHA512.Create())
+                    using (var fs = System.IO.File.OpenRead(jar))
+                    {
+                        var hashBytes = await Task.Run(() => sha.ComputeHash(fs));
+                        sha512 = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                    }
+
+                    // Поиск файла мода по хешу через Modrinth API
+                    var hashLookupUrl = $"https://api.modrinth.com/v2/version_file/{sha512}?algorithm=sha512";
+                    var hashResp = await http.GetAsync(hashLookupUrl);
+                    if (!hashResp.IsSuccessStatusCode) { skipped++; continue; }
+
+                    var hashJson = await hashResp.Content.ReadAsStringAsync();
+                    using var hashDoc = System.Text.Json.JsonDocument.Parse(hashJson);
+                    var projectId = hashDoc.RootElement.GetProperty("project_id").GetString();
+                    var currentVersionId = hashDoc.RootElement.GetProperty("id").GetString();
+
+                    // Получаем последнюю версию мода для данной версии Minecraft и загрузчика
+                    var loader = instance.Loader.ToLowerInvariant();
+                    var latestUrl = $"https://api.modrinth.com/v2/project/{projectId}/version?game_versions=[\"{instance.Version}\"]&loaders=[\"{loader}\"]";
+                    var latestResp = await http.GetAsync(latestUrl);
+                    if (!latestResp.IsSuccessStatusCode) { skipped++; continue; }
+
+                    var latestJson = await latestResp.Content.ReadAsStringAsync();
+                    using var latestDoc = System.Text.Json.JsonDocument.Parse(latestJson);
+                    if (latestDoc.RootElement.GetArrayLength() == 0) { skipped++; continue; }
+
+                    var latestVersion = latestDoc.RootElement[0];
+                    var latestVersionId = latestVersion.GetProperty("id").GetString();
+                    if (latestVersionId == currentVersionId) { skipped++; continue; } // уже актуален
+
+                    // Есть обновление — скачиваем
+                    var files = latestVersion.GetProperty("files");
+                    if (files.GetArrayLength() == 0) { skipped++; continue; }
+
+                    var primaryFile = files.EnumerateArray()
+                        .FirstOrDefault(f => f.TryGetProperty("primary", out var p) && p.GetBoolean());
+                    if (primaryFile.ValueKind == System.Text.Json.JsonValueKind.Undefined)
+                        primaryFile = files[0];
+
+                    var downloadUrl = primaryFile.GetProperty("url").GetString()!;
+                    var newFileName = primaryFile.GetProperty("filename").GetString()!;
+                    var newPath = System.IO.Path.Combine(modsFolder, newFileName);
+
+                    StatusText.Text = $"Обновление: {fileName} → {newFileName}...";
+                    var modBytes = await http.GetByteArrayAsync(downloadUrl);
+                    await System.IO.File.WriteAllBytesAsync(newPath, modBytes);
+
+                    // Удаляем старый JAR если имя изменилось
+                    if (!string.Equals(jar, newPath, StringComparison.OrdinalIgnoreCase))
+                        System.IO.File.Delete(jar);
+
+                    updated++;
+                }
+                catch { failed++; }
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Ошибка проверки модов: {ex.Message}";
+        }
+        finally
+        {
+            InstallProgress.IsIndeterminate = false;
+            InstallProgress.Value = 0;
+        }
+
+        var msg = $"Обновление модов сборки «{instance.Name}» завершено!\n\n✅ Обновлено: {updated}\n⏭ Актуальны: {skipped}\n❌ Не найдено: {failed}";
+        StatusText.Text = updated > 0
+            ? $"Обновлено {updated} мод(а/ов) в сборке «{instance.Name}»."
+            : $"Все моды в «{instance.Name}» актуальны.";
+        ConfirmDialog.ShowSuccess(this, "Обновление модов", msg);
+        LoadLibraryInstances();
+    }
+
     private void ModLoaderTag_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Content is string loaderText)
