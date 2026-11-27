@@ -1233,6 +1233,7 @@ del ""%~f0"" >nul 2>&1
     private static void BlockAdDomainsInHosts()
     {
         // Блокируем рекламные домены Forge (adfocus.us / adf.ly) в hosts-файле
+        // ВАЖНО: files.minecraftforge.net НЕ блокируем — это CDN библиотек Forge
         try
         {
             const string hostsPath = @"C:\Windows\System32\drivers\etc\hosts";
@@ -1241,7 +1242,7 @@ del ""%~f0"" >nul 2>&1
                 "adfocus.us", "www.adfocus.us",
                 "adf.ly", "www.adf.ly",
                 "adfoc.us", "www.adfoc.us",
-                "files.minecraftforge.net"
+                "adfoc.us"
             };
 
             string current = "";

@@ -469,7 +469,7 @@ public sealed class MinecraftService
         var modsFolder = Path.Combine(instanceRoot, "mods");
         if (!Directory.Exists(modsFolder)) return;
 
-        // Список паттернов (glob-like) модов, которые нужно удалить автоматически
+        // Список паттернов (glob-like) модов, которые несовместимы и должны быть отключены
         var incompatiblePatterns = new[]
         {
             // VanillaFix — несовместим с Mixin 0.8.5+, вызывает IllegalAccessError: MixinProcessor
@@ -480,6 +480,9 @@ public sealed class MinecraftService
             "topextras-*.jar",
         };
 
+        // Перемещаем в _disabled_mods (не удаляем — файлы можно вернуть вручную)
+        var disabledFolder = Path.Combine(instanceRoot, "_disabled_mods");
+
         foreach (var pattern in incompatiblePatterns)
         {
             foreach (var file in Directory.GetFiles(modsFolder, pattern))
@@ -487,8 +490,13 @@ public sealed class MinecraftService
                 try
                 {
                     var name = Path.GetFileName(file);
-                    File.Delete(file);
-                    log?.Invoke($"[Авто-исправление] Удалён несовместимый мод: {name}");
+                    Directory.CreateDirectory(disabledFolder);
+                    var dest = Path.Combine(disabledFolder, name);
+                    if (!File.Exists(dest))
+                        File.Move(file, dest);
+                    else
+                        File.Delete(file);
+                    log?.Invoke($"[Авто-исправление] Отключён несовместимый мод: {name}");
                 }
                 catch { }
             }
