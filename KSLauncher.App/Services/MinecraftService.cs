@@ -197,7 +197,7 @@ public sealed class MinecraftService
                 return existing;
         }
         var forge = new ForgeInstaller(launcher);
-        var installedVersion = await forge.Install(version, new ForgeInstallOptions());
+        var installedVersion = await forge.Install(version, new ForgeInstallOptions { SkipIfAlreadyInstalled = true });
         await launcher.InstallAsync(installedVersion);
         return installedVersion;
     }

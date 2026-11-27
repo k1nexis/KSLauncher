@@ -935,32 +935,45 @@ public partial class MainWindow : Window
         }
     }
 
-    private void LaunchLibraryInstance_Click(object sender, RoutedEventArgs e)
+    private async void LaunchLibraryInstance_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not GameInstanceInfo instance) return;
+
+        // Устанавливаем путь ДО навигации, чтобы SelectionChanged не сбросил его
         _activeCustomInstancePath = instance.FolderPath;
-
-        foreach (MinecraftVersion v in VersionBox.Items)
-        {
-            if (v.Id.Equals(instance.Version, StringComparison.OrdinalIgnoreCase))
-            {
-                VersionBox.SelectedItem = v;
-                break;
-            }
-        }
-
-        for (int i = 0; i < GameLoaderBox.Items.Count; i++)
-        {
-            if ((GameLoaderBox.Items[i] as ComboBoxItem)?.Tag?.ToString() == instance.Loader)
-            {
-                GameLoaderBox.SelectedIndex = i;
-                break;
-            }
-        }
-
         ProfileSummaryText.Text = $"{instance.Name} ({instance.Loader} · {instance.Version})";
-        NavigateTo(0);
-        Play_Click(sender, e);
+
+        _suppressProfileClear = true;
+        try
+        {
+            foreach (MinecraftVersion v in VersionBox.Items)
+            {
+                if (v.Id.Equals(instance.Version, StringComparison.OrdinalIgnoreCase))
+                {
+                    VersionBox.SelectedItem = v;
+                    break;
+                }
+            }
+
+            for (int i = 0; i < GameLoaderBox.Items.Count; i++)
+            {
+                if ((GameLoaderBox.Items[i] as ComboBoxItem)?.Tag?.ToString() == instance.Loader)
+                {
+                    GameLoaderBox.SelectedIndex = i;
+                    break;
+                }
+            }
+
+            NavigateTo(0);
+        }
+        finally
+        {
+            _suppressProfileClear = false;
+        }
+
+        // Гарантируем путь после всех событий UI
+        _activeCustomInstancePath = instance.FolderPath;
+        await LaunchGameCoreAsync(instance.Version, instance.Loader, instance.FolderPath, null, 25565);
     }
 
     private async void RepairInstance_Click(object sender, RoutedEventArgs e)
@@ -2068,10 +2081,12 @@ del ""%~f0"" >nul 2>&1
     // НАВИГАЦИЯ И ОФОРМЛЕНИЕ
     // ==========================================
 
+    private bool _suppressProfileClear;
+
     private void GameLoaderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_uiReady) return;
-        _activeCustomInstancePath = null;
+        if (!_suppressProfileClear) _activeCustomInstancePath = null;
         if (ModLoaderBox is not null && GameLoaderBox.SelectedIndex >= 0 && GameLoaderBox.SelectedIndex < ModLoaderBox.Items.Count)
             ModLoaderBox.SelectedIndex = GameLoaderBox.SelectedIndex;
         UpdateProfileSummary();
@@ -2086,7 +2101,7 @@ del ""%~f0"" >nul 2>&1
 
     private void GameProfile_Changed(object sender, SelectionChangedEventArgs e)
     {
-        _activeCustomInstancePath = null;
+        if (!_suppressProfileClear) _activeCustomInstancePath = null;
         UpdateProfileSummary();
     }
     private void UpdateProfileSummary()
