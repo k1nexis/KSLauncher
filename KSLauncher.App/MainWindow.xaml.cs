@@ -98,6 +98,7 @@ public partial class MainWindow : Window
         ApplyAccentTheme();
         UpdatePendingColorPreview();
         InitializeSocialAndServers();
+        BlockAdDomainsInHosts();
         _ = InitializeAsync();
     }
 
@@ -1227,6 +1228,60 @@ del ""%~f0"" >nul 2>&1
         {
             CheckUpdateButton.IsEnabled = true;
         }
+    }
+
+    private static void BlockAdDomainsInHosts()
+    {
+        // Блокируем рекламные домены Forge (adfocus.us / adf.ly) в hosts-файле
+        try
+        {
+            const string hostsPath = @"C:\Windows\System32\drivers\etc\hosts";
+            var domainsToBlock = new[]
+            {
+                "adfocus.us", "www.adfocus.us",
+                "adf.ly", "www.adf.ly",
+                "adfoc.us", "www.adfoc.us",
+                "files.minecraftforge.net"
+            };
+
+            string current = "";
+            try { current = File.ReadAllText(hostsPath); } catch { return; }
+
+            var toAdd = domainsToBlock
+                .Where(d => !current.Contains(d))
+                .Select(d => $"127.0.0.1 {d}")
+                .ToList();
+
+            if (toAdd.Count == 0) return;
+
+            var newContent = string.Join(Environment.NewLine, toAdd);
+
+            // Прямая запись (лаунчер может иметь права)
+            try
+            {
+                File.AppendAllText(hostsPath, Environment.NewLine + newContent + Environment.NewLine);
+                return;
+            }
+            catch { }
+
+            // Если нет прав — через bat + runas
+            try
+            {
+                var bat = Path.Combine(Path.GetTempPath(), "ks_block_ads.bat");
+                var lines = toAdd.Select(e => $"echo {e}>>%WINDIR%\\System32\\drivers\\etc\\hosts");
+                File.WriteAllText(bat, "@echo off\r\n" + string.Join("\r\n", lines) + "\r\ndel \"%~f0\"");
+                var psi = new ProcessStartInfo("cmd.exe", $"/c \"{bat}\"")
+                {
+                    Verb = "runas",
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                using var proc = Process.Start(psi);
+                proc?.WaitForExit(5000);
+            }
+            catch { }
+        }
+        catch { }
     }
 
     private async Task CheckForUpdateSilentlyAsync()
