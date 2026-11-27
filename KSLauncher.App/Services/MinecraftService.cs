@@ -69,7 +69,13 @@ public sealed class MinecraftService
         ConfigureLanguage(root, gameLanguage);
         ConfigureChunkPerformance(root);
 
-        var path = new MinecraftPath(root);
+        var sharedRuntime = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KSLauncher", "runtime");
+        Directory.CreateDirectory(sharedRuntime);
+
+        var path = new MinecraftPath(root)
+        {
+            Runtime = sharedRuntime
+        };
         var parameters = MinecraftLauncherParameters.CreateDefault(path);
         var launcher = new MinecraftLauncher(parameters);
 
@@ -126,6 +132,14 @@ public sealed class MinecraftService
         {
             options.JavaPath = javaPath;
         }
+        else if (IsLegacyJava8Version(version))
+        {
+            var sysJava8 = Java.DetectInstalledJavas().FirstOrDefault(j => !j.IsAuto && j.MajorVersion == 8 && File.Exists(j.Path));
+            if (sysJava8 != null)
+            {
+                options.JavaPath = sysJava8.Path;
+            }
+        }
 
         Logs.Clear();
         Logs.Append($"Подготовка запуска {version} ({loader})...");
@@ -155,15 +169,33 @@ public sealed class MinecraftService
         {
             "fabric" => await new FabricInstaller(new HttpClient()).Install(version, path),
             "quilt" => await new QuiltInstaller(new HttpClient()).Install(version, path),
-            "forge" => await InstallForgeAsync(version, launcher),
+            "forge" => await InstallForgeAsync(version, launcher, path),
             "neoforge" => await new NeoForgeInstaller(launcher).Install(version),
             "vanilla" => version,
             _ => throw new ArgumentException($"Неизвестный загрузчик: {loader}")
         };
     }
 
-    private static async Task<string> InstallForgeAsync(string version, MinecraftLauncher launcher)
+    private static bool IsLegacyJava8Version(string version)
     {
+        var parts = version.Split('.');
+        if (parts.Length >= 2 && int.TryParse(parts[0], out var major) && int.TryParse(parts[1], out var minor))
+        {
+            return major == 1 && minor <= 16;
+        }
+        return false;
+    }
+
+    private static async Task<string> InstallForgeAsync(string version, MinecraftLauncher launcher, MinecraftPath path)
+    {
+        if (Directory.Exists(path.Versions))
+        {
+            var existing = Directory.GetDirectories(path.Versions)
+                .Select(Path.GetFileName)
+                .FirstOrDefault(d => d != null && d.StartsWith($"{version}-forge", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(existing))
+                return existing;
+        }
         var forge = new ForgeInstaller(launcher);
         var installedVersion = await forge.Install(version, new ForgeInstallOptions());
         await launcher.InstallAsync(installedVersion);
