@@ -50,7 +50,10 @@ public static class JvmTuning
             "-XX:+PerfDisableSharedMem",
             "-XX:+OptimizeStringConcat",
             "-Djava.net.preferIPv4Stack=true",
-            "-Dsun.rmi.dgc.server.gcInterval=2147483646"
+            "-Dsun.rmi.dgc.server.gcInterval=2147483646",
+            // Фикс краша OpenAL64.dll (EXCEPTION_ACCESS_VIOLATION) на некоторых системах:
+            // Используем OpenAL Soft (soft_oal.dll) вместо системного OpenAL64.dll
+            "-Dorg.lwjgl.openal.libname=soft_oal.dll"
         };
 
         if (stringDeduplication)

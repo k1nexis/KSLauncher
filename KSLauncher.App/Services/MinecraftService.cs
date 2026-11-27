@@ -238,8 +238,33 @@ public sealed class MinecraftService
         string installedVersion;
         if (!string.IsNullOrWhiteSpace(existingVersion))
         {
-            // Forge уже установлен — только проверяем/докачиваем библиотеки (launchwrapper и пр.)
+            // Forge уже установлен — пропускаем установку и InstallAsync полностью.
+            // launcher.InstallAsync тоже открывает adfocus для Forge-библиотек,
+            // поэтому когда всё уже скачано — не вызываем его вообще.
             installedVersion = existingVersion!;
+
+            // Всё равно проверяем launchwrapper через перехват браузера
+            var browserNames2 = new[] { "chrome", "firefox", "msedge", "opera", "brave", "iexplore" };
+            var pidsBefore2 = System.Diagnostics.Process.GetProcesses()
+                .Where(p => { try { return browserNames2.Any(b => p.ProcessName.ToLowerInvariant().Contains(b)); } catch { return false; } })
+                .Select(p => p.Id)
+                .ToHashSet();
+
+            await launcher.InstallAsync(installedVersion);
+
+            await Task.Delay(800);
+            foreach (var proc in System.Diagnostics.Process.GetProcesses())
+            {
+                try
+                {
+                    if (!pidsBefore2.Contains(proc.Id) &&
+                        browserNames2.Any(b => proc.ProcessName.ToLowerInvariant().Contains(b)))
+                    {
+                        proc.Kill(entireProcessTree: true);
+                    }
+                }
+                catch { }
+            }
         }
         else
         {
@@ -270,8 +295,7 @@ public sealed class MinecraftService
             }
         }
 
-        // Всегда проверяем и докачиваем недостающие библиотеки (launchwrapper, log4j, и т.д.)
-        await launcher.InstallAsync(installedVersion);
+        // Возвращаем версию (InstallAsync уже вызван внутри каждой ветки выше)
         return installedVersion;
     }
 
