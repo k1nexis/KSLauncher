@@ -69,10 +69,48 @@ public sealed class MinecraftService
         ConfigureLanguage(root, gameLanguage);
         ConfigureChunkPerformance(root);
 
+        // Shared ASCII path for libraries/versions/assets/runtime — Java fails to load JARs from Cyrillic paths
+        var sharedBase = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KSLauncher", "shared");
         var sharedRuntime = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KSLauncher", "runtime");
+        Directory.CreateDirectory(sharedBase);
         Directory.CreateDirectory(sharedRuntime);
 
-        var path = new MinecraftPath(root)
+        // If instance root has non-ASCII chars (Cyrillic), mirror mods/config/saves into ASCII game dir
+        bool rootHasNonAscii = root.Any(c => c > 127);
+        string gameRoot = root;
+        if (rootHasNonAscii)
+        {
+            // Use a stable ASCII alias based on instance folder name hash
+            var instanceAlias = "inst_" + Math.Abs(root.GetHashCode()).ToString("x8");
+            gameRoot = Path.Combine(sharedBase, instanceAlias);
+            Directory.CreateDirectory(gameRoot);
+
+            // Mirror mods, config, resourcepacks, saves folders via junction points (no file copying needed)
+            foreach (var folderName in new[] { "mods", "config", "resourcepacks", "saves", "shaderpacks", "screenshots" })
+            {
+                var src = Path.Combine(root, folderName);
+                var dst = Path.Combine(gameRoot, folderName);
+                if (Directory.Exists(src) && !Directory.Exists(dst) && !File.Exists(dst))
+                {
+                    // Create junction (directory symlink) — no file copy needed, works instantly
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/c mklink /J \"{dst}\" \"{src}\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    })?.WaitForExit(3000);
+                }
+            }
+            // Also copy options.txt if present
+            var optSrc = Path.Combine(root, "options.txt");
+            var optDst = Path.Combine(gameRoot, "options.txt");
+            if (File.Exists(optSrc) && !File.Exists(optDst))
+                File.Copy(optSrc, optDst);
+        }
+
+        // MinecraftPath uses ASCII gameRoot — libraries/versions downloaded here, game runs from here
+        var path = new MinecraftPath(gameRoot)
         {
             Runtime = sharedRuntime
         };
@@ -267,7 +305,11 @@ public sealed class MinecraftService
         }
 
         onProgress?.Invoke($"Восстановление ядра {loader} и официальных библиотек...");
-        var path = new MinecraftPath(instanceRoot);
+        var sharedBase = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KSLauncher", "shared");
+        var sharedRuntime = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KSLauncher", "runtime");
+        Directory.CreateDirectory(sharedBase);
+        Directory.CreateDirectory(sharedRuntime);
+        var path = new MinecraftPath(sharedBase) { Runtime = sharedRuntime };
         var launcher = new MinecraftLauncher(path);
 
         var launchVersion = await InstallLoaderAsync(version, loader, path, launcher);
