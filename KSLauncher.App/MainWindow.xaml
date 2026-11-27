@@ -304,7 +304,7 @@
                   <DockPanel LastChildFill="False" Margin="0,0,0,16">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                       <Border Background="{DynamicResource Accent}" Width="10" Height="10" CornerRadius="5" Margin="0,0,10,0"/>
-                      <TextBlock Text="KS Launcher v0.2.0 • Свежее обновление" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF"/>
+                      <TextBlock Text="KS Launcher v0.3.0 • Свежее обновление" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF"/>
                     </StackPanel>
                     <Border Background="#1C2923" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" CornerRadius="8" Padding="10,4" DockPanel.Dock="Right">
                       <TextBlock Text="Что нового" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
@@ -771,7 +771,7 @@
                     <DockPanel LastChildFill="False">
                       <TextBlock Text="ОБНОВЛЕНИЕ ЛАУНЧЕРА" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
                       <Border Background="#1A2D23" BorderBrush="#2F4C3B" BorderThickness="1" CornerRadius="6" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="Версия v0.2.0" Foreground="{DynamicResource Accent}" FontSize="12" FontWeight="Bold"/>
+                        <TextBlock Text="Версия v0.3.0" Foreground="{DynamicResource Accent}" FontSize="12" FontWeight="Bold"/>
                       </Border>
                     </DockPanel>
                     <TextBlock x:Name="UpdateStatusText" Text="Обновляйте лаунчер в 1 клик прямо из настроек без необходимости повторно скачивать установщик." 
