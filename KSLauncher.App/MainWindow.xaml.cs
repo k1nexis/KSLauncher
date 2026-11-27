@@ -1335,6 +1335,81 @@ del ""%~f0"" >nul 2>&1
         }
     }
 
+    private bool _suppressTargetInstanceSync;
+
+    private void RefreshModTargetInstances(string? preferFolderPath = null)
+    {
+        if (ModTargetInstanceBox == null) return;
+        var instances = _minecraft.Instances.GetInstances();
+        var currentPath = preferFolderPath ?? (ModTargetInstanceBox.SelectedItem as GameInstanceInfo)?.FolderPath ?? _activeCustomInstancePath;
+
+        _suppressTargetInstanceSync = true;
+        ModTargetInstanceBox.ItemsSource = instances;
+        if (!string.IsNullOrWhiteSpace(currentPath))
+        {
+            var match = instances.FirstOrDefault(i => i.FolderPath.Equals(currentPath, StringComparison.OrdinalIgnoreCase));
+            ModTargetInstanceBox.SelectedItem = match;
+        }
+        _suppressTargetInstanceSync = false;
+        UpdateModTargetInfoText();
+    }
+
+    private void UpdateModTargetInfoText()
+    {
+        if (ModTargetInfoText == null) return;
+        if (ModTargetInstanceBox.SelectedItem is GameInstanceInfo inst)
+            ModTargetInfoText.Text = $"{inst.Version} • {inst.Loader} • {inst.ModsCount} мод.";
+        else
+            ModTargetInfoText.Text = "Сборка не выбрана (поиск по фильтрам)";
+    }
+
+    private void ModTargetInstanceBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressTargetInstanceSync) return;
+        if (ModTargetInstanceBox.SelectedItem is GameInstanceInfo inst)
+        {
+            _activeCustomInstancePath = inst.FolderPath;
+            foreach (var item in ModVersionBox.Items)
+            {
+                if (item is MinecraftVersion mv && mv.Id.Equals(inst.Version, StringComparison.OrdinalIgnoreCase))
+                {
+                    ModVersionBox.SelectedItem = mv;
+                    break;
+                }
+            }
+            foreach (var item in ModLoaderBox.Items)
+            {
+                if (item is ComboBoxItem cbi && string.Equals(cbi.Tag?.ToString(), inst.Loader, StringComparison.OrdinalIgnoreCase))
+                {
+                    ModLoaderBox.SelectedItem = cbi;
+                    break;
+                }
+            }
+            UpdateModTargetInfoText();
+            SearchMods_Click(sender, e);
+        }
+        else
+        {
+            UpdateModTargetInfoText();
+        }
+    }
+
+    private void ClearModTargetInstance_Click(object sender, RoutedEventArgs e)
+    {
+        ModTargetInstanceBox.SelectedItem = null;
+        _activeCustomInstancePath = null;
+        UpdateModTargetInfoText();
+    }
+
+    private void OpenInstanceMods_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not GameInstanceInfo instance) return;
+        _activeCustomInstancePath = instance.FolderPath;
+        NavigateTo(2);
+        RefreshModTargetInstances(instance.FolderPath);
+        ModTargetInstanceBox_SelectionChanged(sender, new SelectionChangedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, Array.Empty<object>(), Array.Empty<object>()));
+    }
+
     private void ModLoaderTag_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Content is string loaderText)
@@ -1373,11 +1448,16 @@ del ""%~f0"" >nul 2>&1
     {
         if ((sender as FrameworkElement)?.DataContext is not UnifiedModItem item) return;
         var type = (ProjectTypeBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "mod";
-        var loader = (ModLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "fabric";
-        var version = (ModVersionBox.SelectedItem as MinecraftVersion)?.Id;
+        var targetInst = ModTargetInstanceBox.SelectedItem as GameInstanceInfo;
+        var loader = targetInst != null && type != "modpack"
+            ? targetInst.Loader
+            : (ModLoaderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "fabric";
+        var version = targetInst != null && type != "modpack"
+            ? targetInst.Version
+            : (ModVersionBox.SelectedItem as MinecraftVersion)?.Id;
         if (version is null) { StatusText.Text = "Выберите версию Minecraft."; return; }
 
-        var targetInstanceRoot = _activeCustomInstancePath ?? _minecraft.InstancesRoot;
+        var targetInstanceRoot = targetInst?.FolderPath ?? _activeCustomInstancePath ?? _minecraft.InstancesRoot;
 
         try
         {
@@ -2051,7 +2131,11 @@ del ""%~f0"" >nul 2>&1
             button.SetResourceReference(Control.ForegroundProperty, selected ? "Accent" : "Muted");
         }
         if (MainTabs.SelectedIndex == 1) LoadLibraryInstances();
-        if (MainTabs.SelectedIndex == 2 && ModsList.ItemsSource is null) SearchMods_Click(sender, e);
+        if (MainTabs.SelectedIndex == 2)
+        {
+            RefreshModTargetInstances();
+            if (ModsList.ItemsSource is null) SearchMods_Click(sender, e);
+        }
         if (MainTabs.SelectedIndex == 3) LoadSavedAccounts();
         if (MainTabs.SelectedIndex == 5) RefreshFriendsUi();
         if (MainTabs.SelectedIndex == 6) RefreshLocalServersUi();

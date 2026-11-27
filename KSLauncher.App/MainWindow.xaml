@@ -479,6 +479,7 @@
 
                         <WrapPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
                           <Button Content="▶   Играть" Background="{DynamicResource Accent}" Foreground="#101512" BorderBrush="{DynamicResource Accent}" Padding="14,9" Margin="0,0,8,0" Click="LaunchLibraryInstance_Click"/>
+                          <Button Content="⌘   Моды" Padding="12,9" Margin="0,0,8,0" ToolTip="Добавить моды прямо в эту сборку" Click="OpenInstanceMods_Click"/>
                           <Button Content="🔧   Починить сборку" Background="#1C2A22" BorderBrush="#3B5746" Foreground="{DynamicResource Accent}" Padding="14,9" Margin="0,0,8,0" Visibility="{Binding RepairVisibility}" ToolTip="Обнаружена ошибка с модами! Нажмите для анализа лога и восстановления" Click="RepairInstance_Click"/>
                           <Button Content="📁   Папка" Padding="12,9" Margin="0,0,8,0" ToolTip="Открыть папку инстанса в проводнике" Click="OpenInstanceFolder_Click"/>
                           <Button Content="🗑" Padding="10,9" Background="#281717" BorderBrush="#552222" Foreground="#FF8A8A" ToolTip="Удалить сборку" Click="DeleteInstance_Click"/>
@@ -499,16 +500,27 @@
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>
               <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
               <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
             <StackPanel>
               <TextBlock Text="Каталог модов и ресурсов" FontSize="26" FontWeight="Bold"/>
-              <TextBlock Text="Ищите и устанавливайте проекты прямо в папку KS Launcher. Поддерживаются каталоги Modrinth и CurseForge с автоскачиванием зависимостей." Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,6,0,16" FontSize="14"/>
+              <TextBlock Text="Ищите и устанавливайте проекты прямо в выбранную сборку из Библиотеки. Поддерживаются Modrinth и CurseForge с автоскачиванием зависимостей." Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,6,0,12" FontSize="14"/>
             </StackPanel>
 
+            <!-- Выбор сборки из Библиотеки, куда устанавливать моды -->
+            <Border Grid.Row="1" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="0,0,0,10">
+              <DockPanel LastChildFill="False">
+                <TextBlock Text="Устанавливать в сборку:" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ComboBox x:Name="ModTargetInstanceBox" Width="280" DisplayMemberPath="Name" SelectionChanged="ModTargetInstanceBox_SelectionChanged" ToolTip="Выберите сборку из Библиотеки, в которую будут ставиться моды"/>
+                <TextBlock x:Name="ModTargetInfoText" Text="Общая папка (сборка не выбрана)" FontSize="12" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <Button Content="✕ Сбросить" Padding="10,6" FontSize="12" DockPanel.Dock="Right" Click="ClearModTargetInstance_Click" ToolTip="Устанавливать без привязки к конкретной сборке"/>
+              </DockPanel>
+            </Border>
+
             <!-- Панель поиска и фильтров с увеличенной кнопкой поиска и выбором каталога -->
-            <DockPanel Grid.Row="1" Margin="0,0,0,14">
+            <DockPanel Grid.Row="2" Margin="0,0,0,14">
               <!-- Выбор каталога: Modrinth / CurseForge -->
               <ComboBox x:Name="ModSourceBox" Width="140" SelectedIndex="0" ToolTip="Источник модов" Margin="0,0,8,0" SelectionChanged="ModSourceBox_SelectionChanged">
                 <ComboBoxItem Content="Modrinth" Tag="modrinth"/>
@@ -541,7 +553,7 @@
             </DockPanel>
 
             <!-- Список результатов с улучшенным цветом текста и иконкой скачивания -->
-            <ListBox x:Name="ModsList" Grid.Row="2" Background="Transparent" BorderThickness="0" Foreground="#F4F7F5" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
+            <ListBox x:Name="ModsList" Grid.Row="3" Background="Transparent" BorderThickness="0" Foreground="#F4F7F5" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <Border Background="#121917" BorderBrush="#26372D" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,0,8">
