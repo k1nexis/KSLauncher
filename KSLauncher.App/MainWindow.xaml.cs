@@ -74,6 +74,7 @@ public partial class MainWindow : Window
 
     private const string CurrentVersion = "0.3.0";
     private const string GitHubReleasesApi = "https://api.github.com/repos/k1nexis/KSLauncher/releases/latest";
+    private DateTime? _updateSnoozeUntil;
 
     private Process? _runningGameProcess;
     private string? _runningInstancePath;
@@ -176,7 +177,15 @@ public partial class MainWindow : Window
         LoadSavedAccounts();
         _ = SendTelemetryAsync("launch");
         _ = RefreshServerLivePingAsync();
-        _ = CheckStartupUpdateAsync();
+        _ = CheckForUpdateSilentlyAsync();
+
+        // Периодическая проверка каждые 30 минут
+        var updateTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMinutes(30)
+        };
+        updateTimer.Tick += async (_, _) => await CheckForUpdateSilentlyAsync();
+        updateTimer.Start();
     }
 
     private async Task RefreshServerLivePingAsync()
@@ -437,6 +446,10 @@ public partial class MainWindow : Window
                 ElyWorkerUrlBox.Text = _elyWorkerUrl; // default
                 CloudUrlBox.Text = _elyWorkerUrl.TrimEnd('/');
             }
+
+            // Восстанавливаем "Напомнить позже"
+            if (settings?.UpdateSnoozeUntil.HasValue == true)
+                _updateSnoozeUntil = settings.UpdateSnoozeUntil.Value;
         }
         catch (Exception ex) { BackgroundStatusText.Text = $"Не удалось открыть сохранённый фон: {ex.Message}"; }
         finally { _suppressSettingsWrites = false; }
@@ -460,7 +473,8 @@ public partial class MainWindow : Window
             _panelOpacity,
             _fxType,
             _fxDensity,
-            _fxSpeed
+            _fxSpeed,
+            _updateSnoozeUntil
         ), new JsonSerializerOptions { WriteIndented = true }));
     }
 
@@ -718,6 +732,7 @@ public partial class MainWindow : Window
                     {
                         _runningGameProcess = null;
                         UpdateRunningStateUI();
+                        _ = CheckForUpdateSilentlyAsync();
 
                         if (_userRequestedStop)
                         {
@@ -1214,20 +1229,22 @@ del ""%~f0"" >nul 2>&1
         }
     }
 
-    private async Task CheckStartupUpdateAsync()
+    private async Task CheckForUpdateSilentlyAsync()
     {
+        // Если пользователь нажал "Напомнить позже" и срок не истёк — пропускаем
+        if (_updateSnoozeUntil.HasValue && DateTime.Now < _updateSnoozeUntil.Value)
+            return;
+
         try
         {
             using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
             http.DefaultRequestHeaders.Add("User-Agent", "KSLauncher/" + CurrentVersion);
 
-            // Проверяем последний релиз через GitHub Releases API
             var json = await http.GetStringAsync(GitHubReleasesApi);
             using var doc = JsonDocument.Parse(json);
             var tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
             var latestVersion = tagName.TrimStart('v');
 
-            // Сравниваем версии
             if (!Version.TryParse(latestVersion, out var latest)) return;
             if (!Version.TryParse(CurrentVersion, out var current)) return;
             if (latest <= current) return;
@@ -1235,25 +1252,39 @@ del ""%~f0"" >nul 2>&1
             var releaseNotes = doc.RootElement.TryGetProperty("body", out var bodyEl)
                 ? bodyEl.GetString() ?? ""
                 : "";
-            // Обрезаем release notes до 300 символов
             if (releaseNotes.Length > 300)
                 releaseNotes = releaseNotes[..300] + "...";
 
-            Dispatcher.Invoke(() =>
-            {
-                var msg = $"Доступна новая версия KSLauncher: v{latestVersion}\n" +
-                          $"(установлена: v{CurrentVersion})\n\n" +
-                          (string.IsNullOrWhiteSpace(releaseNotes) ? "" : $"Что нового:\n{releaseNotes}\n\n") +
-                          "Нажмите «Обновить» чтобы установить обновление автоматически.";
-
-                var answer = ConfirmDialog.Show(this, "🆕 Доступно обновление",
-                    msg, "Обновить сейчас", "Позже");
-
-                if (answer)
-                    NavigateTo(4); // вкладка Настройки
-            });
+            Dispatcher.Invoke(() => ShowUpdateNotificationDialog(latestVersion, releaseNotes));
         }
-        catch { /* не мешаем запуску если нет интернета */ }
+        catch { /* не мешаем работе если нет интернета */ }
+    }
+
+    private void ShowUpdateNotificationDialog(string latestVersion, string releaseNotes)
+    {
+        var msg = $"Доступна новая версия KSLauncher: v{latestVersion}\n" +
+                  $"(установлена: v{CurrentVersion})\n\n" +
+                  (string.IsNullOrWhiteSpace(releaseNotes) ? "" : $"Что нового:\n{releaseNotes}\n\n") +
+                  "Вы можете обновиться сейчас или напомнить позже.";
+
+        // Диалог с 3 кнопками: Обновить / В настройки / Напомнить позже (3 дня)
+        var dlg = new UpdateNotificationDialog(this, latestVersion, msg);
+        dlg.ShowDialog();
+
+        switch (dlg.Result)
+        {
+            case UpdateDialogResult.UpdateNow:
+                NavigateTo(4); // вкладка Настройки
+                CheckUpdate_Click(this, new System.Windows.RoutedEventArgs());
+                break;
+            case UpdateDialogResult.GoToSettings:
+                NavigateTo(4);
+                break;
+            case UpdateDialogResult.RemindLater:
+                _updateSnoozeUntil = DateTime.Now.AddDays(3);
+                _ = SaveSettingsAsync(_backgroundPath);
+                break;
+        }
     }
 
     private void OpenInstanceFolder_Click(object sender, RoutedEventArgs e)
@@ -3133,6 +3164,7 @@ del ""%~f0"" >nul 2>&1
         double PanelOpacity = 0.85,
         string FxType = "none",
         int FxDensity = 60,
-        double FxSpeed = 1.0
+        double FxSpeed = 1.0,
+        DateTime? UpdateSnoozeUntil = null
     );
 }

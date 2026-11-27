@@ -1,0 +1,109 @@
+<Window x:Class="KSLauncher.App.UpdateNotificationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="KS Launcher" Width="510" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" WindowStyle="None" AllowsTransparency="False"
+        Background="#0B0F0E" Foreground="#F4F7F5" FontFamily="Segoe UI" FontSize="14"
+        ShowInTaskbar="False" ResizeMode="NoResize">
+  <Border x:Name="DialogBorder" Background="#111614" BorderBrush="#25352C" BorderThickness="1.5" CornerRadius="14" Padding="22">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <!-- Шапка окна -->
+      <DockPanel Grid.Row="0" Margin="0,0,0,16" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+        <Border x:Name="IconBadge" Width="38" Height="38" CornerRadius="10" Background="#1A2E20" Margin="0,0,12,0" VerticalAlignment="Center">
+          <TextBlock Text="🆕" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+        <Button Content="✕" Width="28" Height="28" Padding="0" FontSize="13" Foreground="#8FA39A" Background="Transparent"
+                BorderThickness="0" Cursor="Hand" DockPanel.Dock="Right" VerticalAlignment="Center" Click="Close_Click">
+          <Button.Template>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Bd" Property="Background" Value="#293932"/>
+                  <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Button.Template>
+        </Button>
+        <TextBlock x:Name="TitleText" Text="Доступно обновление" FontSize="17" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+      </DockPanel>
+
+      <!-- Текст сообщения -->
+      <TextBlock x:Name="MessageText" Grid.Row="1" Text=""
+                 FontSize="14" Foreground="#CAD7D1" TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,22"/>
+
+      <!-- Кнопки управления: Обновить | В настройки | Напомнить позже (3 дня) -->
+      <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+
+        <!-- Напомнить позже -->
+        <Button x:Name="RemindLaterButton" Content="⏰ Напомнить позже (3 дня)"
+                Padding="14,9" Margin="0,0,8,0" FontSize="13" FontWeight="SemiBold"
+                Background="#18221F" Foreground="#8FA39A" BorderBrush="#283931" BorderThickness="1"
+                Cursor="Hand" Click="RemindLater_Click">
+          <Button.Template>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Bd" Property="Background" Value="#243028"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Button.Template>
+        </Button>
+
+        <!-- В настройки -->
+        <Button x:Name="SettingsButton" Content="⚙️ В настройки"
+                Padding="16,9" Margin="0,0,8,0" FontSize="13" FontWeight="SemiBold"
+                Background="#18221F" Foreground="#E2ECE6" BorderBrush="#283931" BorderThickness="1"
+                Cursor="Hand" Click="GoToSettings_Click">
+          <Button.Template>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Bd" Property="Background" Value="#24332B"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Button.Template>
+        </Button>
+
+        <!-- Обновить -->
+        <Button x:Name="UpdateButton" Content="⬇️ Обновить"
+                Padding="20,9" FontSize="13" FontWeight="Bold"
+                Background="#16A34A" Foreground="#FFFFFF" BorderThickness="0"
+                Cursor="Hand" Click="UpdateNow_Click">
+          <Button.Template>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Bd" Property="Opacity" Value="0.88"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Button.Template>
+        </Button>
+
+      </StackPanel>
+    </Grid>
+  </Border>
+</Window>
